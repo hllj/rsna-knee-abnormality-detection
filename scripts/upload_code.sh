@@ -6,7 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 USER_NAME=$(python3 -c "import json,os;print(json.load(open(os.path.expanduser('~/.kaggle/kaggle.json')))['username'])")
 STAGE=$(mktemp -d)
-cp -R src configs scripts "$STAGE/"
+cp -R src configs scripts submission requirements.txt "$STAGE/"
 find "$STAGE" -name "__pycache__" -type d -prune -exec rm -rf {} +
 cat > "$STAGE/dataset-metadata.json" <<META
 {"title": "rsna-knee-code", "id": "$USER_NAME/rsna-knee-code", "licenses": [{"name": "CC-BY-NC-4.0"}]}

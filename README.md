@@ -6,6 +6,7 @@ built on [hllj/kaggle-boilerplate](https://github.com/hllj/kaggle-boilerplate) (
 **Read [docs/COMPETITION_NOTES.md](docs/COMPETITION_NOTES.md) first**: rules, host rulings, what works, public assets, plan.
 Public labels / weights / notebooks / discussions, scored and summarised: [docs/KAGGLE_RESOURCES.md](docs/KAGGLE_RESOURCES.md).
 **All experiments and their scores: [experiments/EXPERIMENTS.md](experiments/EXPERIMENTS.md).**
+Training on a rented GPU (vast.ai RTX 3090) → Kaggle submission: [docs/VAST.md](docs/VAST.md).
 
 ## The pipeline on Kaggle (how a submission is produced)
 
@@ -16,9 +17,10 @@ private dataset `hlly34/rsna-knee-code` (this repo's `src/ configs/ scripts/`) a
 |---|---|---|---|---|---|
 | 0 | `rsna-knee-dryrun-train` | T4, internet | competition, labels | 1 fold on a 658-study subset | EXP-000 |
 | 1 | `rsna-knee-cache` | CPU | competition | `cache_256/*.npz` for all 4,407 studies | EXP-001 |
-| 2 | `rsna-knee-train-teacher` | T4, internet | cache, labels | 5 fold models, OOF + gold predictions, CV summary | EXP-002 |
+| 1b | `rsna-knee-cache-pack` | CPU | cache | same cache as ~1 GB tar shards (for vast.ai download) | EXP-001 |
+| 2 | `rsna-knee-train-teacher` | T4×2, internet | cache, labels | fold 0 first (then folds 1-4 = EXP-005): model, OOF + gold preds, CV | EXP-002 |
 | 3 | `rsna-knee-train-student` | T4, internet | cache, labels, teacher OOF | 5 fold models trained on pseudo-labels | EXP-003 |
-| 4 | `rsna-knee-inference` | T4, **internet off** | teacher + student outputs | `submission.csv` (rank-averaged 10 models) | EXP-004 |
+| 4 | `rsna-knee-inference` | T4, **internet off** | teacher + student outputs, *or* `hlly34/rsna-knee-weights` from vast.ai | `submission.csv` (rank-averaged fold models) | EXP-004 |
 
 ```
 rsna-knee-code ─┬─► cache ──► train-teacher ──(OOF)──► train-student

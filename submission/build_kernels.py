@@ -29,8 +29,11 @@ LABEL_DATASETS = ["stevenleehans/rsna-knee-llm-report-labels", "pilkwang/rsna-kn
 EXPERIMENTS = {
     "dryrun": {"id": "EXP-000", "what": "subset sanity run: 58 gold + 600 studies, EfficientNet-B0 fold 0, 8 epochs"},
     "cache": {"id": "EXP-001", "what": "full training cache: 4,407 studies, 256 px, 72 slices, 140 mm, canonical knee"},
-    "train-teacher": {"id": "EXP-002", "what": "teacher: EfficientNet-B0 @224, 5 folds x 15 epochs, blended report labels",
-                      "exp": "effnet_224", "epochs": 15, "folds": [0, 1, 2, 3, 4], "extra": []},
+    "cache-pack": {"id": "EXP-001", "what": "EXP-001 cache re-packed into ~1 GB tar shards so it can be downloaded "
+                   "off Kaggle (vast.ai) in a few requests instead of 4,407"},
+    "train-teacher": {"id": "EXP-002", "what": "teacher: EfficientNet-B0 @224, FOLD 0 ONLY x 15 epochs, blended report "
+                      "labels (check one fold before spending GPU on all five; folds 1-4 = EXP-005)",
+                      "exp": "effnet_224", "epochs": 15, "folds": [0], "extra": []},
     "train-student": {"id": "EXP-003", "what": "student: same model, targets = 50/50 report labels + teacher OOF "
                       "(Synovitis 70%, PF/Lateral OA 60%)", "exp": "teacher_pseudo", "epochs": 15,
                       "folds": [0, 1, 2, 3, 4], "extra": [], "teacher": "train-teacher"},
@@ -275,8 +278,10 @@ print(EXP)'''),
     return cells
 
 
-def nb_inference():
+def nb_inference(weights: str = None):
     srcs = ", ".join(f"`{USER}/rsna-knee-{s}` ({EXPERIMENTS[s]['id']})" for s in EXPERIMENTS["inference"]["sources"])
+    if weights:
+        srcs = f"the weights dataset `{weights}` (uploaded by `scripts/vast/submit.sh`)"
     return [
         ("md", header("inference", "RSNA Knee — ensemble inference (internet OFF)",
                       f"Scores the hidden test set with every fold model attached from {srcs}. Test DICOMs go "
@@ -287,7 +292,8 @@ def nb_inference():
                "output (needed for JPEG-compressed DICOMs)."),
         ("code", '''WHEELS = walk_find(lambda d, f: d if os.path.basename(d) == "wheels" and any(x.endswith(".whl") for x in f) else None)
 if WHEELS:
-    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-index", "--find-links", WHEELS,
+    # --no-deps: never let an offline wheel (e.g. numpy) replace the image's own packages
+    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-index", "--no-deps", "--find-links", WHEELS,
                     "pylibjpeg", "pylibjpeg-libjpeg", "pylibjpeg-openjpeg"], check=False)
 CKPTS = []
 walk_find(lambda d, f: CKPTS.extend(os.path.join(d, x) for x in sorted(f) if x.endswith(".pt")) and None)
@@ -308,6 +314,35 @@ EXP.update(models=len(CKPTS), test_studies=len(sub), seconds=round(time.time() -
            test_slot_coverage=round(float(np.mean([np.load(f)["valid"].mean() for f in files])), 4))
 json.dump(EXP, open("/kaggle/working/experiment.json", "w"), indent=1)
 print(EXP); sub.head()'''),
+    ]
+
+
+def nb_pack():
+    return [
+        ("md", header("cache-pack", "RSNA Knee — pack the cache into shards",
+                      "Kaggle's API downloads notebook outputs file by file, so 4,407 `.npz` files are impractical to "
+                      "fetch on a rented GPU. This notebook re-packs `rsna-knee-cache` into a few plain `.tar` shards "
+                      "(the npz files are already compressed) plus a manifest. `scripts/vast/get_data.sh` downloads "
+                      "and unpacks them.")),
+        ("code", exp_json("cache-pack") + "\n" + FIND),
+        ("code", '''import hashlib, tarfile
+CACHE = walk_find(lambda d, f: d if os.path.basename(d) == "cache_256" and any(x.endswith(".npz") for x in f[:50]) else None)
+files = sorted(f for f in os.listdir(CACHE) if f.endswith(".npz"))
+total = sum(os.path.getsize(os.path.join(CACHE, f)) for f in files)
+n_shards = max(1, round(total / 2**30))            # ~1 GiB per shard
+manifest = {"studies": len(files), "bytes": total, "shards": []}
+for k in range(n_shards):
+    name = f"cache_256_part{k:02d}.tar"
+    with tarfile.open(f"/kaggle/working/{name}", "w") as tar:
+        for f in files[k::n_shards]:
+            tar.add(os.path.join(CACHE, f), arcname=f"cache_256/{f}")
+    h = hashlib.sha256(open(f"/kaggle/working/{name}", "rb").read()).hexdigest()
+    manifest["shards"].append({"file": name, "sha256": h, "bytes": os.path.getsize(f"/kaggle/working/{name}")})
+    print(name, manifest["shards"][-1]["bytes"] / 2**20, "MiB")
+json.dump(manifest, open("/kaggle/working/cache_manifest.json", "w"), indent=1)
+EXP.update(studies=len(files), size_gib=round(total / 2**30, 2), shards=n_shards)
+json.dump(EXP, open("/kaggle/working/experiment.json", "w"), indent=1)
+print(EXP)'''),
     ]
 
 
@@ -332,10 +367,29 @@ def write(key: str, cells, meta):
 
 
 if __name__ == "__main__":
+    import argparse
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--weights-dataset", default=None,
+                    help="inference notebook loads *.pt (+ wheels) from this dataset, e.g. hlly34/rsna-knee-weights "
+                         "(scripts/vast/submit.sh), instead of the Kaggle training notebooks' outputs")
+    ap.add_argument("--inference-id", default=None, help="experiment id for the inference notebook, e.g. EXP-006")
+    ap.add_argument("--inference-what", default=None, help="one-line description of that inference experiment")
+    args = ap.parse_args()
+    if args.inference_id:
+        EXPERIMENTS["inference"]["id"] = args.inference_id
+    if args.inference_what:
+        EXPERIMENTS["inference"]["what"] = args.inference_what
+    write("cache-pack", nb_pack(), metadata("cache-pack", False, False, (), ["cache"]))
     write("dryrun", nb_dryrun(), metadata("dryrun-train", True, True, LABEL_DATASETS))
     write("cache", nb_cache(), metadata("cache", False, True))
     write("train-teacher", nb_train("train-teacher"), metadata("train-teacher", True, True, LABEL_DATASETS, ["cache"]))
     write("train-student", nb_train("train-student"),
           metadata("train-student", True, True, LABEL_DATASETS, ["cache", "train-teacher"]))
-    write("inference", nb_inference(), metadata("inference", True, False, (), EXPERIMENTS["inference"]["sources"]))
+    if args.weights_dataset:
+        EXPERIMENTS["inference"]["sources"] = []
+        write("inference", nb_inference(weights=args.weights_dataset),
+              metadata("inference", True, False, (args.weights_dataset,), ()))
+    else:
+        write("inference", nb_inference(), metadata("inference", True, False, (), EXPERIMENTS["inference"]["sources"]))
     print("written:", sorted(k for k in os.listdir(HERE) if os.path.isdir(os.path.join(HERE, k))))
