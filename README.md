@@ -11,6 +11,17 @@ Training / inference pipeline for [rsna-knee-abnormality-detection](https://www.
 | [docs/VAST.md](docs/VAST.md) | details of the rented-GPU workflow below |
 | [experiments/EXPERIMENTS.md](experiments/EXPERIMENTS.md) | every experiment: CV, gold-58, public LB |
 
+**Current best: EXP-009 — EfficientNet-B0 @224, 5 folds, rank-averaged → public LB 0.914**
+(OOF 0.867 vs report labels, gold-58 0.893). Full history in [experiments/EXPERIMENTS.md](experiments/EXPERIMENTS.md).
+
+| Exp | What | OOF | Gold-58 | Public LB |
+|---|---|---|---|---|
+| EXP-000 | dry run: fold 0, 485 studies, 8 epochs | 0.762 | 0.771 | 0.791 |
+| EXP-007 | fold 0 only, full data, 15 epochs | 0.865 | 0.876 | 0.907 |
+| EXP-008 | fold 1 only (same setup) | 0.874 | 0.877 | 0.905 |
+| EXP-009 | all 5 folds, rank-averaged | 0.867 | 0.893 | **0.914** |
+| EXP-010 | student, 50/50 pseudo-labels (fold 0) | 0.845 | 0.851 | — (stopped: worse) |
+
 ---
 
 ## 0. What already exists on Kaggle (account `hlly34`)
@@ -83,7 +94,13 @@ python scripts/track.py lb           # pulls public LB scores into the registry 
 ```
 
 ### A6. Student round (pseudo-labels from the teacher's out-of-fold predictions)
+> **Measured (EXP-010): the default 50/50 mix is worse than the teacher** on fold 0
+> (OOF 0.845 vs 0.865, gold 0.851 vs 0.876). Check fold 0 first and compare its
+> `models/oof/student_pseudo_oof_fold0.csv` against the teacher on report labels (not the student's own
+> `val_auc_report`, which is scored against the pseudo-blended targets). Try a smaller weight first:
+> `labels.pseudo.weight=0.2 labels.pseudo.per_label_weight={}`.
 ```bash
+bash scripts/vast/train.sh teacher_pseudo 0 labels.pseudo.weight=0.2 "labels.pseudo.per_label_weight={}"   # fold 0 check
 bash scripts/vast/train.sh teacher_pseudo "0 1 2 3 4"    # uses models/oof/effnet_b0_224.csv by default
 bash scripts/vast/submit.sh EXP-008 "teacher+student 10-model ensemble" \
     models/effnet_b0_224/fold*.pt models/student_pseudo/fold*.pt
