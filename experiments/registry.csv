@@ -12,7 +12,7 @@ EXP-009,2026-09-29,submit,hlly34/rsna-knee-inference,4,effnet_b0_224,tf_efficien
 EXP-010,2026-09-29,train,vast.ai 53197961,,student_pseudo,tf_efficientnet_b0.ns_jft_in1k,224,15,,True,0,,0.8454,0.8509,,,,"NEGATIVE, stopped after fold 0: 50/50 report + teacher-OOF targets are worse than the teacher on the same fold (OOF vs report labels 0.845 vs 0.865, gold 0.851 vs 0.876). Its own val_auc_report (0.915) is vs pseudo-blended targets, not comparable. Next pseudo attempt: smaller weight (0.2-0.3) and/or only Synovitis."
 EXP-011,2026-09-29,infer,hlly34/rsna-knee-bench,2,,,,,,,,,,,,,,"inference benchmark, 150 fresh studies/variant, 5 x EXP-009 ckpts, T4+4 CPUs: old cache path 1.23 s/study (26.6 min/1300); stream full 1.05 (22.8 min); stream+selective 0.34 (7.3 min, gold ens 0.8938 vs 0.8930, r=0.99997); +pct4 0.42"
 EXP-012,2026-09-29,submit,hlly34/rsna-knee-inference,5,effnet_b0_224,tf_efficientnet_b0.ns_jft_in1k,224,15,,,"0,1,2,3,4",,0.86669,0.88483,0.89282,0.914,,EXP-009 checkpoints via fast streaming inference (ideas 1-4); same LB as EXP-009; submit->scored ~11 min (vs <=30 min old path)
-EXP-013,2026-09-29,train,hlly34/rsna-knee-iter02-a,1,,,,,,,,,,,,,,"RUNNING ITER-02 fold 0: EfficientNet-B0 @288 (256 cache upsampled), 15 ep"
-EXP-014,2026-09-29,train,hlly34/rsna-knee-iter02-a,1,,,,,,,,,,,,,,"RUNNING ITER-02 fold 0: ConvNeXt-S @288, 15 ep"
+EXP-013,2026-09-29,train,hlly34/rsna-knee-iter02-a,2,,,,,,,,,,,,,,RUNNING v2 (bs 8 x accum 2). v1 CUDA OOM on 14.5 GB T4 at bs16 x 16 windows @288
+EXP-014,2026-09-29,train,hlly34/rsna-knee-iter02-a,2,,,,,,,,,,,,,,"RUNNING v2 (bs 4 x accum 2, grad ckpt). v1 CUDA OOM on T4 at bs8 @288"
 EXP-015,2026-09-29,train,hlly34/rsna-knee-iter02-b,1,,,,,,,,,,,,,,"RUNNING ITER-02 fold 0: CoAtNet-RMLP-2 @384, 10 ep, bs 4, val every 2, 9 h cap"
 EXP-016,2026-09-29,infer,hlly34/rsna-knee-iter02-b,1,,,,,,,,,,,,,,RUNNING: EXP-009 fold0 re-scored k_eval 48 vs 64

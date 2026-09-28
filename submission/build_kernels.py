@@ -42,8 +42,12 @@ EXPERIMENTS = {
     # ITER-02 fold-0 checks (docs/WORKFLOW.md step 1); bar = EXP-009 fold 0: OOF 0.865, gold 0.876
     "iter02-a": {"id": "EXP-013/014", "what": "ITER-02 fold 0: EfficientNet-B0 @288 (EXP-013, GPU0) and ConvNeXt-S @288 "
                  "(EXP-014, GPU1), both upsampled from the 256 cache",
-                 "jobs": [{"exp": "EXP-013", "gpu": 0, "train": ["effnet_288", 0, []]},
-                          {"exp": "EXP-014", "gpu": 1, "train": ["convnext_288", 0, []]}]},
+                 # v1 OOM on the 14.5 GB T4 (bs16/bs8 x 16 windows at 288): same effective batch via accumulation
+                 "jobs": [{"exp": "EXP-013", "gpu": 0, "train": ["effnet_288", 0, [
+                              "training.batch_size=8", "training.accumulate_grad_batches=2"]]},
+                          {"exp": "EXP-014", "gpu": 1, "train": ["convnext_288", 0, [
+                              "training.batch_size=4", "training.accumulate_grad_batches=2",
+                              "model.grad_checkpointing=true"]]}]},
     "iter02-b": {"id": "EXP-015/016", "what": "ITER-02 fold 0: CoAtNet-RMLP-2 @384 (EXP-015, GPU0, 10 epochs, bs 4, "
                  "val every 2, 9 h cap) and EXP-009 fold 0 re-scored with 64 vs 48 eval windows (EXP-016, GPU1)",
                  "jobs": [{"exp": "EXP-015", "gpu": 0, "train": ["coatnet_384", 0, [
