@@ -21,11 +21,28 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def test_load_series_sorts_by_position(fake_comp):
     study = glob.glob(str(fake_comp / "raw" / "train_series" / "*"))[0]
     series = glob.glob(os.path.join(study, "*"))[0]
-    vol, spacing = load_series(series)
+    vol, spacing, geo = load_series(series)
     # intensity encodes true z; must be monotonic despite shuffled file names / instance numbers
     means = vol.mean((1, 2))
     assert np.all(np.diff(means) > 0) or np.all(np.diff(means) < 0)
     assert spacing == (0.5, 0.5)
+    assert geo["centres"].shape == (len(vol), 3)
+
+
+def test_knee_side_and_canonicalise():
+    from src.dataset.dicom import canonicalise, knee_side
+
+    right = {"centres": np.array([[-80.0, 0, 0], [-60.0, 0, 0]]), "row_cos": np.array([1.0, 0, 0]), "tag": ""}
+    left = {"centres": np.array([[60.0, 0, 0], [80.0, 0, 0]]), "row_cos": np.array([1.0, 0, 0]), "tag": ""}
+    mid = {"centres": np.array([[5.0, 0, 0], [6.0, 0, 0]]), "row_cos": None, "tag": "L"}
+    assert knee_side([right]) == 1 and knee_side([left]) == -1 and knee_side([mid]) == -1
+    vol = np.arange(2 * 1 * 3, dtype=np.float32).reshape(2, 1, 3)
+    # sagittal left knee: slices descend in x (lateral -> medial)
+    assert canonicalise(vol, left, "Sagittal", -1)[0, 0, 0] == vol[1, 0, 0]
+    assert canonicalise(vol, right, "Sagittal", 1)[0, 0, 0] == vol[0, 0, 0]
+    # coronal left knee: mirrored columns; right knee untouched
+    assert canonicalise(vol, left, "Coronal", -1)[0, 0].tolist() == vol[0, 0, ::-1].tolist()
+    assert canonicalise(vol, right, "Coronal", 1)[0, 0].tolist() == vol[0, 0].tolist()
 
 
 def test_crop_and_sampling():

@@ -22,6 +22,7 @@ from torch.utils.data import DataLoader
 from src.constants import ID_COL, LABELS
 from src.dataset.datasets import KneeStudyDataset
 from src.dataset.dicom import build_study_stack, slot_specs_from_cfg
+from src.kaggle_paths import find_competition_root
 from src.models.model import build_model
 
 
@@ -32,6 +33,7 @@ def _cache_one(args):
         d = build_study_stack(
             study_dir, series, slot_specs_from_cfg(pp["slots"]), res=pp["res"],
             crop_mm=pp["crop_mm"], span=pp["span"], pcts=pp["clip_percentiles"],
+            canonical=pp.get("canonical", True),
         )
         np.savez(out, **d)
     return uid
@@ -78,7 +80,7 @@ def rank01(p: np.ndarray) -> np.ndarray:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data_dir", default="/kaggle/input/rsna-knee-abnormality-detection")
+    ap.add_argument("--data_dir", default=None, help="competition dir (auto-detected on Kaggle)")
     ap.add_argument("--ckpts", nargs="+", required=True)
     ap.add_argument("--weights", nargs="*", type=float, default=None)
     ap.add_argument("--rank_average", action="store_true")
@@ -87,7 +89,10 @@ def main():
     ap.add_argument("--out", default="submission.csv")
     a = ap.parse_args()
 
-    ckpts = sorted(p for pat in a.ckpts for p in glob.glob(pat))
+    ckpts = sorted({p for pat in a.ckpts for p in glob.glob(pat, recursive=True)})
+    assert ckpts, f"no checkpoints match {a.ckpts}"
+    a.data_dir = a.data_dir or find_competition_root()
+    assert a.data_dir, "competition data not found; pass --data_dir"
     test = pd.read_csv(os.path.join(a.data_dir, "test.csv"), dtype={ID_COL: str})
     series = pd.read_csv(os.path.join(a.data_dir, "test_series.csv"), dtype={ID_COL: str, "SeriesInstanceUID": str})
     ids = test[ID_COL].tolist()

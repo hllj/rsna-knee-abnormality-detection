@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.config import get_config  # noqa: E402
 from src.constants import ID_COL  # noqa: E402
+from src.dataset.folds import gold_ids  # noqa: E402
 from src.models.inference import build_cache  # noqa: E402
 
 
@@ -26,6 +27,11 @@ def main():
     train = pd.read_csv(cfg.data.train_file, dtype={ID_COL: str})
     series = pd.read_csv(cfg.data.train_series_file, dtype={ID_COL: str, "SeriesInstanceUID": str})
     ids = [u for u in train[ID_COL] if os.path.isdir(os.path.join(cfg.data.train_dicom_dir, u))]
+    limit = int(cfg.preprocess.get("limit", 0) or 0)
+    if limit:  # dry-run subset: all gold studies + a random sample of the rest
+        gold = set(gold_ids(train))
+        rest = pd.Series([u for u in ids if u not in gold]).sample(frac=1.0, random_state=cfg.seed).tolist()
+        ids = [u for u in ids if u in gold] + rest[:limit]
     done = set()
     if os.path.isdir(cfg.paths.cache_dir):
         done = {f[:-4] for f in os.listdir(cfg.paths.cache_dir) if f.endswith(".npz")}

@@ -7,8 +7,14 @@
   "is_private": true,
   "enable_gpu": true,
   "enable_internet": false,
-  "dataset_sources": ["hlly34/rsna-knee-code", "hlly34/rsna-knee-weights"],
-  "competition_sources": ["rsna-knee-abnormality-detection"],
-  "kernel_sources": [],
+  "dataset_sources": [
+    "hlly34/rsna-knee-code"
+  ],
+  "competition_sources": [
+    "rsna-knee-abnormality-detection"
+  ],
+  "kernel_sources": [
+    "hlly34/rsna-knee-dryrun-train"
+  ],
   "model_sources": []
 }

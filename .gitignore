@@ -120,3 +120,5 @@ Thumbs.db
 # Keep repo metadata that the blanket *.json / *.csv rules above would drop
 !submission/kernel/kernel-metadata.json
 .pytest_cache/
+!submission/dryrun/kernel-metadata.json
+.claude/

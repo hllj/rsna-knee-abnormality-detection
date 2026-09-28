@@ -61,7 +61,9 @@ labels:
 # DICOM -> cached uint8 stack. Each study becomes one (D, res, res) stack built from slots.
 preprocess:
   res: 256                         # stored resolution; training can resize down
-  crop_mm: 150                     # physical field of view (centre crop) — 140–160 works well
+  crop_mm: 140                     # physical FOV (centre crop). Median FOV is 160 mm, so <=140 is
+                                   # needed for the crop to apply to most series (130 -> 98.5%)
+  canonical: true                  # mirror left knees to right, order slices anatomically
   span: [0.04, 0.96]               # fraction of each series to sample slices from
   clip_percentiles: [1, 99]
   # slot name -> (plane, fluid_sensitive, n_slices). Missing slots are zero-filled and masked.
@@ -73,6 +75,7 @@ preprocess:
     ax_fs: {plane: Axial, fluid: 1, n: 14}
     ax_t1: {plane: Axial, fluid: 0, n: 4}
   num_workers: 8
+  limit: 0                         # >0: cache only the 58 gold + `limit` random studies (dry runs)
 
 # Model
 model:

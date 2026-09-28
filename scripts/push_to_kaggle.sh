@@ -8,7 +8,7 @@ STAGE=$(mktemp -d)
 
 # --- code dataset -----------------------------------------------------------
 mkdir -p "$STAGE/code"
-cp -R src configs "$STAGE/code/"
+cp -R src configs scripts "$STAGE/code/"
 find "$STAGE/code" -name "__pycache__" -prune -exec rm -rf {} +
 cat > "$STAGE/code/dataset-metadata.json" <<META
 {"title": "rsna-knee-code", "id": "$USER/rsna-knee-code", "licenses": [{"name": "CC-BY-NC-4.0"}]}
