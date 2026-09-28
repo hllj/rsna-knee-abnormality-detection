@@ -25,23 +25,8 @@ rm -f "$DATA/labels"/*.py
 
 echo "== cache shards from $USER_NAME/rsna-knee-cache-pack"
 if [ "$(ls "$DATA/processed/cache_256" 2>/dev/null | wc -l)" -lt 4407 ]; then
-  for i in 1 2 3 4 5; do   # the output API rate-limits; retry
-    kaggle kernels output "$USER_NAME/rsna-knee-cache-pack" -p "$DATA/_pack" && break || sleep 30
-  done
-  "$PY" - "$DATA" <<'PY'
-import hashlib, json, os, sys, tarfile
-data = sys.argv[1]
-man = json.load(open(f"{data}/_pack/cache_manifest.json"))
-for s in man["shards"]:
-    p = f"{data}/_pack/{s['file']}"
-    h = hashlib.sha256(open(p, "rb").read()).hexdigest()
-    assert h == s["sha256"], f"checksum mismatch {p}"
-    tarfile.open(p).extractall(f"{data}/processed")
-    print("extracted", s["file"])
-n = len([f for f in os.listdir(f"{data}/processed/cache_256") if f.endswith(".npz")])
-assert n == man["studies"], (n, man["studies"])
-print(f"cache ok: {n} studies")
-PY
+  # one shard per request, checksum-verified, resumable (re-run the script if interrupted)
+  "$PY" scripts/vast/fetch_cache.py --data "$DATA" --user "$USER_NAME"
   rm -rf "$DATA/_pack"
 fi
 "$PY" scripts/eval_labels.py "paths.data_dir=$DATA"
