@@ -21,8 +21,11 @@ Training / inference pipeline for [rsna-knee-abnormality-detection](https://www.
 | EXP-008 | fold 1 only (same setup) | 0.874 | 0.877 | 0.905 |
 | EXP-009 | all 5 folds, rank-averaged | 0.867 | 0.893 | **0.914** |
 | EXP-010 | student, 50/50 pseudo-labels (fold 0) | 0.845 | 0.851 | — (stopped: worse) |
+| EXP-012 | EXP-009 checkpoints via fast streaming inference (~11 min instead of ~30) | 0.867 | 0.893 | **0.914** |
 
-Latest iteration report: [experiments/reports/ITER-01_2026-09-28.md](experiments/reports/ITER-01_2026-09-28.md).
+Iteration reports: [ITER-01 baseline](experiments/reports/ITER-01_2026-09-28.md) ·
+[ITER-01b inference speed-up](experiments/reports/ITER-01b_inference_speedup.md) ·
+[ITER-02 plan (resolution / backbone)](experiments/reports/ITER-02_plan.md).
 
 ---
 

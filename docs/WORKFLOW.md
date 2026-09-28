@@ -57,14 +57,22 @@ check, submissions, CV–LB reading, backups, keep/drop, ranked next ideas, cost
 Kaggle limit: 9 h per submission run (efficiency prize also rewards less). Measured on the hidden-test path
 (Kaggle T4, 4 CPUs, ~1,300 test studies):
 
-| Part | Cost | Source |
-|---|---|---|
-| DICOM → cache (once, shared by all models) | 1.05–1.5 s/study → **23–32 min** | dry run: 658 studies in 693–971 s |
-| EfficientNet-B0 @224, 1 fold (48 windows/study) | ~1.5–2 min (data-loader bound) | 3090 val 928 studies ≈ 70 s; EXP-009 log +0.9 s/fold on 3 studies |
-| **1 fold total** | **~25–35 min** | EXP-007 scored ≲ 32 min after submit |
-| **5 folds total** | **~32–45 min** | EXP-009 scored ≲ 30 min after submit |
+Since EXP-012 the inference notebook uses **stream mode** (selective DICOM decode, threaded/raw reads,
+CPU/GPU overlap, all checkpoints on one data pass). Benchmark EXP-011 (T4 + 4 CPUs, 5 EfficientNet-B0 folds,
+150 fresh studies per variant):
 
-Rule of thumb: `total ≈ 30 min + Σ_models (1,300 studies / throughput)`. For a new architecture, time the fold-0
+| Path | s/study | ~1,300 test studies | Gold-58 ens. AUC |
+|---|---|---|---|
+| old: npz cache, one pass per checkpoint | 1.23 | 26.6 min | 0.8930 |
+| stream, full decode | 1.05 | 22.8 min | 0.8930 |
+| **stream + selective decode (default)** | **0.34** | **7.3 min** | 0.8938 |
+
+Real hidden-test run: EXP-012 (same 5 checkpoints) scored LB 0.914 = EXP-009, **~11 min submit → scored**
+(old path ≲ 30 min). GPU is now ~0.2 s/study for 5 EfficientNet-B0 models, i.e. model cost matters again:
+
+Rule of thumb: `total ≈ 7 min + Σ_models (1,300 × per-study GPU time)`; bench a new architecture with
+`python scripts/bench_inference.py --variants C_stream_selective --ckpts <new>/*.pt` (or the `rsna-knee-bench`
+notebook). For a new architecture, time the fold-0
 validation pass on the training box and scale by 1,300 / 928 × (T4 / 3090 slowdown ≈ 2–3× for GPU-bound models).
 Keep the full submission under ~3 h to leave margin for slower test DICOMs. `NO_SUBMIT=1 submit.sh` runs the
 notebook on the 3 public test studies only — it checks correctness, not runtime.

@@ -311,9 +311,10 @@ main()
 print(f"inference {time.time() - t0:.0f}s")'''),
         ("code", '''import numpy as np, pandas as pd
 sub = pd.read_csv("/kaggle/working/submission.csv")
-files = glob.glob("/tmp/knee_cache/*/*.npz")
-EXP.update(models=len(CKPTS), test_studies=len(sub), seconds=round(time.time() - t0),
-           test_slot_coverage=round(float(np.mean([np.load(f)["valid"].mean() for f in files])), 4))
+files = glob.glob("/tmp/knee_cache/*/*.npz")   # only written in --mode cache (stream keeps stacks in memory)
+EXP.update(models=len(CKPTS), test_studies=len(sub), seconds=round(time.time() - t0))
+if files:
+    EXP["test_slot_coverage"] = round(float(np.mean([np.load(f)["valid"].mean() for f in files])), 4)
 json.dump(EXP, open("/kaggle/working/experiment.json", "w"), indent=1)
 print(EXP); sub.head()'''),
     ]

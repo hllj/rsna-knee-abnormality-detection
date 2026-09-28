@@ -10,8 +10,9 @@ Final submission deadline 2026-10-22 (team merge / entry 2026-10-15). 5 submissi
    gold-58 did not drop by > ~0.02; otherwise record as NEGATIVE and go to step 5.
 2. **Submit 1 fold and the 5-fold ensemble** — `scripts/vast/submit.sh EXP-NNN "<msg>" <ckpts>` for fold 0, then train
    folds 1-4 and submit all 5 (optionally a blend with the current best). Keep one submission/day spare.
-   Check the inference time budget first (docs/WORKFLOW.md): ~30 min preprocessing for ~1,300 test studies +
-   per-model cost; EXP-009 (5 × EfficientNet-B0) scored in ~30 min vs the 9 h limit — keep a full run under ~3 h.
+   Check the inference time budget first (docs/WORKFLOW.md): stream-mode inference preprocesses ~1,300 test
+   studies in ~7 min; EXP-012 (5 × EfficientNet-B0) scored in ~11 min vs the 9 h limit — keep a full run under ~3 h.
+   Benchmark new architectures with scripts/bench_inference.py (rsna-knee-bench notebook).
 3. **Update results and CV–LB** — `python scripts/track.py lb`, `python scripts/track.py add EXP-NNN --outputs
    runs/EXP-NNN`; check `experiments/EXPERIMENTS.md → CV vs LB`; update the "Current best" table in README.md.
 4. **Upload models for backup** — copy the box's `models/` to `runs/EXP-NNN/`, then
