@@ -124,6 +124,14 @@ scp -P <PORT> root@<HOST>:~/rsna-knee/experiments/registry.csv experiments/regis
 python scripts/track.py render && git add experiments && git commit -m "experiments: EXP-00x"
 ```
 
+### A9. Back up every checkpoint to Kaggle Models (one variation per fold)
+```bash
+python scripts/upload_models.py --model rsna-knee-effnet-b0-224 --exp EXP-009 runs/EXP-009/models/effnet_b0_224/fold*.pt
+```
+Backed up so far (private): [hlly34/rsna-knee-effnet-b0-224](https://www.kaggle.com/models/hlly34/rsna-knee-effnet-b0-224)
+→ PyTorch variations `exp-009-fold0` … `exp-009-fold4` (the 0.914 ensemble) and `exp-000-fold0` (dry run).
+Attach a variation to any Kaggle notebook to reuse it; each carries `fold<k>.pt`, `fold<k>_metrics.json` and usage notes.
+
 ---
 
 ## Path B — everything inside Kaggle notebooks (T4, ~30 GPU-h/week, max 2 GPU sessions)
