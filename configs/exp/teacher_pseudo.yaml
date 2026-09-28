@@ -1,9 +1,10 @@
 # Round-2 student: report labels blended with out-of-fold teacher predictions.
-# Run all 5 folds of a teacher first (each writes models/oof/<exp>_fold{k}.csv), then
-# python scripts/merge_oof.py --exp coatnet2_384  -> models/oof/coatnet2_384.csv
+# Train all folds of the teacher first (scripts/vast/train.sh effnet_224 "0 1 2 3 4"); train.sh / merge_oof.py
+# then write models/oof/effnet_b0_224.csv, one out-of-fold prediction per training study.
+# Using another teacher: override labels.pseudo.oof_files=[models/oof/<teacher exp_name>.csv]
 exp_name: student_pseudo
 labels:
   pseudo:
     enabled: true
-    oof_files: [models/oof/coatnet2_384.csv]
+    oof_files: [models/oof/effnet_b0_224.csv]
     weight: 0.5
