@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Download everything training needs (~5 GB): competition csvs, public label sets, and the preprocessed
+# Download everything training needs (~15 GB): competition csvs, public label sets, and the preprocessed
 # cache built on Kaggle (EXP-001, re-packed into tar shards by the rsna-knee-cache-pack notebook).
 # No DICOMs are downloaded.
 #

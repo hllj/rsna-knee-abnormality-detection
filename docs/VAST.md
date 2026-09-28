@@ -1,7 +1,7 @@
 # Training on a rented GPU (vast.ai RTX 3090) and submitting to Kaggle
 
 Kaggle gives ~30 GPU-h/week on T4s and at most 2 GPU sessions at once. A rented RTX 3090 (24 GB) trains the
-same models faster, without those limits. Only the preprocessed cache (~5 GB) is downloaded — never the 570 GB
+same models faster, without those limits. Only the preprocessed cache (14.5 GiB in 14 tar shards) is downloaded — never the 570 GB
 of DICOMs — and the submission itself still runs on Kaggle (code competition, internet off).
 
 ```
@@ -18,7 +18,7 @@ hlly34/rsna-knee-weights (dataset) ◄──────────── scrip
 ## 0. Rent the box
 
 * Template: any **PyTorch (CUDA 12.x)** image; 1× RTX 3090; ≥ 8 CPU cores (data loading is CPU-bound —
-  more cores ≈ faster epochs); ≥ 32 GB RAM; ≥ 40 GB disk.
+  more cores ≈ faster epochs); ≥ 32 GB RAM; ≥ 60 GB disk (shards + extracted cache).
 
 ## 1. Setup (once per box)
 
@@ -35,7 +35,7 @@ bash scripts/vast/setup.sh        # pip deps, GPU check
 The code dataset is refreshed from the repo with `KAGGLE_BIN=kaggle bash scripts/upload_code.sh "msg"`.
 (If you push the repo to GitHub, `git clone` instead works just as well.)
 
-## 2. Data (~5 GB, a few minutes)
+## 2. Data (~15 GB: 14 cache shards + csvs + labels)
 
 ```bash
 bash scripts/vast/get_data.sh     # csvs + public label sets + cache shards (checksum-verified) + label AUC check
