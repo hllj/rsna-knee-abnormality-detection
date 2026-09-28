@@ -29,7 +29,7 @@ DRYRUN = [
     "# Verifies the whole pipeline on real DICOMs: 58 gold + N random studies, EfficientNet-B0 fold 0.\n"
     "LIMIT, EPOCHS, EXP = 600, 8, 'effnet_224'\n" + FIND,
     # deps + offline wheels for the inference kernel
-    '''subprocess.run([sys.executable, "-m", "pip", "install", "-q", "iterative-stratification",
+    '''subprocess.run([sys.executable, "-m", "pip", "install", "-q", "iterative-stratification", "lightning",
                 "pylibjpeg", "pylibjpeg-libjpeg", "pylibjpeg-openjpeg"], check=True)
 os.makedirs("/kaggle/working/wheels", exist_ok=True)
 subprocess.run([sys.executable, "-m", "pip", "download", "-q", "-d", "/kaggle/working/wheels",
