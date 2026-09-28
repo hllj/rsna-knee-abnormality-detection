@@ -91,3 +91,20 @@ total LLM API spend was < $5, and cheap vs expensive LLMs made little difference
 4. **Validate** — held-out report-label fold (noise ≈ 0.003) + gold 58 as a coarse sanity check.
 5. **Submit** — rank-average diverse members; optionally blend with the public 0.943 ensemble for the main LB,
    and keep one fast single model for the efficiency prize.
+
+## 6. Dry run on Kaggle (2026-09-28)
+
+Kernels: `hlly34/rsna-knee-dryrun-train` (GPU T4, internet on) → `hlly34/rsna-knee-inference` (GPU, internet OFF).
+Code is uploaded as the private dataset `hlly34/rsna-knee-code`.
+
+| Step | Result |
+|---|---|
+| Kaggle mounts | `/kaggle/input/competitions/<slug>`, `/kaggle/input/datasets/<user>/<slug>`, `/kaggle/input/notebooks/<user>/<kernel>` — auto-detected |
+| Preprocess 58 gold + 600 random studies (4 CPUs) | 693–971 s → ~1.3 s/study; full train set ≈ 1.5 h on a CPU kernel |
+| Knee side from geometry | R 343 / L 301 / unknown 14; slot coverage 100% (same-plane fallback) |
+| Train EfficientNet-B0 @224, fold 0, 485 train studies, 8 epochs | 394 s on one T4 |
+| Held-out report-label AUC (115 studies) | 0.762 |
+| Gold-58 AUC (image model / report labels) | **0.771** / 0.893 — model already beats labels on Effusion, Lateral OA, Synovitis |
+| Test inference (3 public test studies) | 31 s in the dry-run kernel; 79 s offline incl. wheel install |
+
+Not the model's ceiling: 11% of the data and 8 epochs. Next run: full cache, 5 folds, 15–20 epochs.
