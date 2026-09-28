@@ -1,0 +1,6 @@
+exp_id,date,kind,kernel,version,exp_name,backbone,img_size,epochs,labels,pseudo,folds,n_train,oof_auc,gold_auc_mean_fold,gold_auc_ensemble,lb_public,minutes,notes
+EXP-000,2026-09-28,train,hlly34/rsna-knee-dryrun-train,2,effnet_b0_224,tf_efficientnet_b0.ns_jft_in1k,224,8,llm_labels_v4_blend+llm_labels_full+report_labels_v2,False,0,485,0.7619,0.7711,,,6.6,"dry run: 58 gold + 600 random studies, fold 0 only; inference via hlly34/rsna-knee-inference v1"
+EXP-001,2026-09-28,cache,hlly34/rsna-knee-cache,1,,,,,,,,,,,,,,"RUNNING: full cache 4,407 studies, 256px, 72 slices, 140mm, canonical knee, compressed npz"
+EXP-002,2026-09-28,train,hlly34/rsna-knee-train-teacher,,,,,,,,,,,,,,,"PLANNED: teacher effnet_b0_224, 5 folds x 15 ep, blended report labels"
+EXP-003,2026-09-28,train,hlly34/rsna-knee-train-student,,,,,,,,,,,,,,,"PLANNED: student, 50/50 report + teacher OOF pseudo-labels, 5 folds"
+EXP-004,2026-09-28,infer,hlly34/rsna-knee-inference,,,,,,,,,,,,,,,"PLANNED: rank-average all 10 fold models, internet off"

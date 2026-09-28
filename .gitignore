@@ -122,3 +122,6 @@ Thumbs.db
 .pytest_cache/
 !submission/dryrun/kernel-metadata.json
 .claude/
+!configs/folds_5.csv
+!experiments/registry.csv
+!experiments/*.json

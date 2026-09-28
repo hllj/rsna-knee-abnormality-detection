@@ -35,7 +35,7 @@ def _cache_one(args):
             crop_mm=pp["crop_mm"], span=pp["span"], pcts=pp["clip_percentiles"],
             canonical=pp.get("canonical", True),
         )
-        np.savez(out, **d)
+        (np.savez_compressed if pp.get("compress") else np.savez)(out, **d)
     return uid
 
 

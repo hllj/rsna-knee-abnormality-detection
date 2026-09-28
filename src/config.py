@@ -10,7 +10,10 @@ from typing import List, Optional
 
 from omegaconf import DictConfig, OmegaConf
 
-CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "configs")
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CONFIG_PATH = os.path.join(REPO_ROOT, "configs")
+if not OmegaConf.has_resolver("repo"):
+    OmegaConf.register_new_resolver("repo", lambda: REPO_ROOT)  # ${repo:} = repository root
 
 
 def get_config(overrides: Optional[List[str]] = None, config_name: str = "default") -> DictConfig:

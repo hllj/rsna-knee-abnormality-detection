@@ -7,8 +7,14 @@
   "is_private": true,
   "enable_gpu": true,
   "enable_internet": true,
-  "dataset_sources": ["hlly34/rsna-knee-code", "stevenleehans/rsna-knee-llm-report-labels", "pilkwang/rsna-knee-llm-labels"],
-  "competition_sources": ["rsna-knee-abnormality-detection"],
+  "dataset_sources": [
+    "hlly34/rsna-knee-code",
+    "stevenleehans/rsna-knee-llm-report-labels",
+    "pilkwang/rsna-knee-llm-labels"
+  ],
+  "competition_sources": [
+    "rsna-knee-abnormality-detection"
+  ],
   "kernel_sources": [],
   "model_sources": []
 }

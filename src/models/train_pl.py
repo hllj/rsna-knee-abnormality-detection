@@ -10,8 +10,10 @@ Outputs (models/<exp_name>/):
     ../oof/<exp>_fold{f}.csv   out-of-fold predictions (for pseudo-labels / blending)
 """
 import copy
+import json
 import math
 import os
+import time
 from typing import Dict, List
 
 import lightning as L
@@ -155,11 +157,17 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
     os.makedirs(cfg.paths.oof_dir, exist_ok=True)
 
+    t_start = time.time()
     train_df = pd.read_csv(cfg.data.train_file)
     targets = build_targets(cfg)
+    # report-only targets (no pseudo-labels): the common ruler for OOF AUC across rounds
+    report_targets = build_targets(OmegaConf.merge(cfg, {"labels": {"pseudo": {"enabled": False}}}))
+    report_targets.rename_axis(ID_COL).reset_index().to_csv(
+        os.path.join(cfg.paths.oof_dir, "report_targets.csv"), index=False)
     if not os.path.exists(cfg.data.folds_file):
-        os.makedirs(os.path.dirname(cfg.data.folds_file), exist_ok=True)
-        make_folds(train_df, targets, cfg.data.num_folds, cfg.seed).to_csv(cfg.data.folds_file, index=False)
+        # folds must not depend on pseudo-labels, or OOF predictions leak between rounds
+        os.makedirs(os.path.dirname(cfg.data.folds_file) or ".", exist_ok=True)
+        make_folds(train_df, report_targets, cfg.data.num_folds, cfg.seed).to_csv(cfg.data.folds_file, index=False)
     folds = pd.read_csv(cfg.data.folds_file, dtype={ID_COL: str})
     cached = {f[:-4] for f in os.listdir(cfg.paths.cache_dir) if f.endswith(".npz")}
     folds = folds[folds[ID_COL].isin(cached)]
@@ -213,6 +221,7 @@ def main():
     log.info(f"saved {export}")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    metrics = {}
     for name, ids in (("oof", va_ids), ("gold", gd_ids)):
         if not ids:
             continue
@@ -221,6 +230,16 @@ def main():
         truth = np.stack([y[u] for u in pred[ID_COL]])
         m, per = macro_auc(truth, pred[LABELS].values)
         log.info(f"[{name}] macro AUC {m:.4f} | " + " ".join(f"{k}={v:.3f}" for k, v in per.items()))
+        metrics[f"{name}_auc"], metrics[f"{name}_per_label"] = round(m, 5), {k: round(v, 4) for k, v in per.items()}
+
+    # one JSON per run: read by scripts/track.py into experiments/registry.csv
+    metrics.update(exp_name=cfg.exp_name, fold=cfg.fold, n_train=len(tr_ids), n_val=len(va_ids),
+                   minutes=round((time.time() - t_start) / 60, 1), backbone=cfg.model.backbone,
+                   img_size=cfg.model.img_size, epochs=cfg.training.num_epochs,
+                   labels=list(cfg.labels.sources), pseudo=bool(cfg.labels.pseudo.enabled),
+                   topk_scores=[round(s_, 4) for s_, _ in topk.kept])
+    with open(os.path.join(out_dir, f"fold{cfg.fold}_metrics.json"), "w") as f:
+        json.dump(metrics, f, indent=1)
 
 
 if __name__ == "__main__":

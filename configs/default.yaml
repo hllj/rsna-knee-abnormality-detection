@@ -26,7 +26,7 @@ data:
   sample_submission_file: ${paths.raw_data}/sample_submission.csv
   train_dicom_dir: ${paths.raw_data}/train_series
   test_dicom_dir: ${paths.raw_data}/test_series
-  folds_file: ${paths.processed_data}/folds.csv
+  folds_file: ${repo:}/configs/folds_5.csv # committed canonical split (gold 58 = fold -1); shared by all runs
   num_folds: 5
 
 # Training targets built from report-derived labels (see src/labeling/blend.py).
@@ -75,6 +75,7 @@ preprocess:
     ax_fs: {plane: Axial, fluid: 1, n: 14}
     ax_t1: {plane: Axial, fluid: 0, n: 4}
   num_workers: 8
+  compress: false                  # savez_compressed (~2x smaller, for Kaggle's 20 GB output cap)
   limit: 0                         # >0: cache only the 58 gold + `limit` random studies (dry runs)
 
 # Model

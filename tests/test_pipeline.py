@@ -116,6 +116,7 @@ def test_end_to_end(fake_comp, tmp_path, monkeypatch):
         "model.backbone=resnet18", "model.pretrained=false", "model.img_size=64",
         "windows.k_train=4", "windows.k_eval=6", "training.batch_size=2", "training.num_epochs=2",
         "training.precision=32", "resources.num_workers=0", "resources.devices=1", "exp_name=smoke",
+        f"data.folds_file={tmp_path}/folds.csv",
     ]
     monkeypatch.setattr(sys, "argv", ["preprocess"] + ov)
     sys.path.insert(0, os.path.join(ROOT, "scripts"))
@@ -130,6 +131,18 @@ def test_end_to_end(fake_comp, tmp_path, monkeypatch):
     train_pl.main()
     assert os.path.exists("models/smoke/fold0.pt")
     assert os.path.exists("models/oof/smoke_oof_fold0.csv") and os.path.exists("models/oof/smoke_gold_fold0.csv")
+    assert os.path.exists("models/smoke/fold0_metrics.json")
+
+    import merge_oof
+
+    monkeypatch.setattr(sys, "argv", ["merge", "--exp", "smoke", "--train", str(fake_comp / "raw" / "train.csv"),
+                                      "--targets", "models/oof/report_targets.csv"])
+    merge_oof.main()
+    import json
+
+    cv = json.load(open("models/oof/smoke_cv.json"))
+    assert cv["folds"] == 1 and "gold_auc_ensemble" in cv and "oof_auc" in cv
+    assert os.path.exists("models/oof/smoke.csv")  # teacher file for pseudo-labels
 
     from src.models import inference
 
