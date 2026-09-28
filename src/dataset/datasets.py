@@ -33,6 +33,13 @@ def select_centers(centers: np.ndarray, k: int, train: bool) -> np.ndarray:
     return centers[np.linspace(0, len(centers) - 1, k).round().astype(int)]
 
 
+def eval_windows(d: Dict[str, np.ndarray], k: int):
+    """Deterministic evaluation windows of one cached study: uint8 (K, 3, H, W) and slot ids (K,).
+    Same selection as KneeStudyDataset(train=False); used by the streaming inference."""
+    cs = select_centers(window_centers(d["slot"], d["valid"]), k, train=False)
+    return np.stack([d["image"][c - 1: c + 2] for c in cs]), d["slot"][cs].astype(np.int64)
+
+
 class KneeStudyDataset(Dataset):
     """
     Args:

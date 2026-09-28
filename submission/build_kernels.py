@@ -37,6 +37,8 @@ EXPERIMENTS = {
     "train-student": {"id": "EXP-003", "what": "student: same model, targets = 50/50 report labels + teacher OOF "
                       "(Synovitis 70%, PF/Lateral OA 60%)", "exp": "teacher_pseudo", "epochs": 15,
                       "folds": [0, 1, 2, 3, 4], "extra": [], "teacher": "train-teacher"},
+    "bench": {"id": "EXP-011", "what": "inference speed-up benchmark: old cache path vs streaming (threaded/raw "
+              "DICOM reads, CPU/GPU overlap, one pass for all checkpoints) vs selective decode; EXP-009 weights"},
     "inference": {"id": "EXP-004", "what": "rank-average ensemble of all teacher + student folds",
                   "sources": ["train-teacher", "train-student"]},
 }
@@ -346,6 +348,34 @@ print(EXP)'''),
     ]
 
 
+def nb_bench():
+    return [
+        ("md", header("bench", "RSNA Knee — inference speed-up benchmark",
+                      "Runs `scripts/bench_inference.py` on training DICOMs with the 5 EXP-009 checkpoints. Each "
+                      "variant is timed on its own fresh studies (no file-cache advantage), then all variants predict "
+                      "the same 58 gold studies and are compared with the original path.\n\n"
+                      "| Variant | What |\n|---|---|\n"
+                      "| A_cache_full | original: npz cache for all studies, then one DataLoader pass per checkpoint |\n"
+                      "| B_stream_full | + threaded/raw DICOM reads, CPU/GPU overlap, one data pass for all checkpoints |\n"
+                      "| C_stream_selective | + decode only the ~72 sampled slices; intensity window from them |\n"
+                      "| D_stream_selective_pct4 | as C, plus every 4th slice for the intensity window |")),
+        ("code", exp_json("bench") + "\n" + FIND),
+        ("code", '''WHEELS = walk_find(lambda d, f: d if os.path.basename(d) == "wheels" and any(x.endswith(".whl") for x in f) else None)
+if WHEELS:
+    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-index", "--no-deps", "--find-links", WHEELS,
+                    "pylibjpeg", "pylibjpeg-libjpeg", "pylibjpeg-openjpeg"], check=False)
+CKPTS = []
+walk_find(lambda d, f: CKPTS.extend(os.path.join(d, x) for x in sorted(f) if x.endswith(".pt")) and None)
+print(len(CKPTS), "checkpoints:", CKPTS)
+t0 = time.time()
+subprocess.run([sys.executable, f"{CODE}/scripts/bench_inference.py", "--data_dir", COMP, "--ckpts", *CKPTS,
+                "--n_time", "150", "--out", "/kaggle/working/bench_inference.json"],
+               env=dict(os.environ, PYTHONPATH=CODE), check=True)
+EXP.update(json.load(open("/kaggle/working/bench_inference.json")), minutes=round((time.time() - t0) / 60, 1))
+json.dump(EXP, open("/kaggle/working/experiment.json", "w"), indent=1)'''),
+    ]
+
+
 def metadata(key: str, gpu: bool, internet: bool, datasets=(), kernels=()):
     return {"id": f"{USER}/rsna-knee-{key}", "title": f"rsna-knee-{key}", "code_file": f"rsna-knee-{key}.ipynb",
             "language": "python", "kernel_type": "notebook", "is_private": True, "enable_gpu": gpu,
@@ -381,6 +411,7 @@ if __name__ == "__main__":
     if args.inference_what:
         EXPERIMENTS["inference"]["what"] = args.inference_what
     write("cache-pack", nb_pack(), metadata("cache-pack", False, False, (), ["cache"]))
+    write("bench", nb_bench(), metadata("bench", True, False, (f"{USER}/rsna-knee-weights",), ()))
     write("dryrun", nb_dryrun(), metadata("dryrun-train", True, True, LABEL_DATASETS))
     write("cache", nb_cache(), metadata("cache", False, True))
     write("train-teacher", nb_train("train-teacher"), metadata("train-teacher", True, True, LABEL_DATASETS, ["cache"]))

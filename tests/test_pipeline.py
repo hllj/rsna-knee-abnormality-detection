@@ -154,3 +154,44 @@ def test_end_to_end(fake_comp, tmp_path, monkeypatch):
     sub = pd.read_csv("submission.csv")
     assert list(sub.columns) == [ID_COL] + LABELS and len(sub) == 3
     assert ((sub[LABELS] >= 0) & (sub[LABELS] <= 1)).all().all()
+
+    # stream mode (default, selective decode) vs the original cache mode with exact percentiles
+    monkeypatch.setattr(sys, "argv", [
+        "infer", "--data_dir", str(fake_comp / "raw"), "--ckpts", "models/smoke/*.pt", "--workers", "2",
+        "--mode", "cache", "--selective", "0", "--out", "submission_cache.csv",
+    ])
+    inference.main()
+    monkeypatch.setattr(sys, "argv", [
+        "infer", "--data_dir", str(fake_comp / "raw"), "--ckpts", "models/smoke/*.pt", "--workers", "2",
+        "--pct_stride", "1", "--out", "submission_stream.csv",
+    ])
+    inference.main()
+    a = pd.read_csv("submission_cache.csv").set_index(ID_COL)
+    b = pd.read_csv("submission_stream.csv").set_index(ID_COL).loc[a.index]
+    np.testing.assert_allclose(a.values, b.values, atol=1e-4)
+
+
+def test_fast_decode_matches_pydicom(fake_comp):
+    import pydicom
+
+    from src.dataset.dicom import decode_slice
+
+    f = glob.glob(str(fake_comp / "raw" / "train_series" / "*" / "*" / "*.dcm"))[0]
+    np.testing.assert_array_equal(decode_slice(f), pydicom.dcmread(f).pixel_array.astype(np.float32))
+
+
+def test_selective_stack_matches_full_decode(fake_comp):
+    from src.dataset.dicom import SlotSpec, build_study_stack
+
+    series = pd.read_csv(fake_comp / "raw" / "train_series.csv", dtype=str)
+    series["Fluid_Sensitive"] = series["Fluid_Sensitive"].astype(int)
+    uid = series[ID_COL].iloc[0]
+    slots = [SlotSpec("sag_fs", "Sagittal", 1, 5), SlotSpec("cor_t1", "Coronal", 0, 3), SlotSpec("ax_fs", "Axial", 1, 4)]
+    kw = dict(study_dir=str(fake_comp / "raw" / "train_series" / uid), series=series[series[ID_COL] == uid],
+              slots=slots, res=32, crop_mm=40)
+    full = build_study_stack(**kw)
+    exact = build_study_stack(**kw, selective=True, pct_stride=1)   # every slice in the window -> identical
+    for k in ("image", "slot", "valid", "side"):
+        np.testing.assert_array_equal(full[k], exact[k])
+    fast = build_study_stack(**kw, selective=True, pct_stride=0)    # window from sampled slices only
+    assert fast["valid"].all() and np.abs(fast["image"].astype(int) - full["image"].astype(int)).mean() < 40
