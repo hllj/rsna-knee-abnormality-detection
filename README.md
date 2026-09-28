@@ -98,9 +98,10 @@ python scripts/track.py lb           # pulls public LB scores into the registry 
 > (OOF 0.845 vs 0.865, gold 0.851 vs 0.876). Check fold 0 first and compare its
 > `models/oof/student_pseudo_oof_fold0.csv` against the teacher on report labels (not the student's own
 > `val_auc_report`, which is scored against the pseudo-blended targets). Try a smaller weight first:
-> `labels.pseudo.weight=0.2 labels.pseudo.per_label_weight={}`.
+> `labels.pseudo.weight=0.2` plus the three per-finding weights set to 0.2 (OmegaConf merges dicts, so `{}` would not clear them).
 ```bash
-bash scripts/vast/train.sh teacher_pseudo 0 labels.pseudo.weight=0.2 "labels.pseudo.per_label_weight={}"   # fold 0 check
+bash scripts/vast/train.sh teacher_pseudo 0 labels.pseudo.weight=0.2 labels.pseudo.per_label_weight.Synovitis=0.2 \
+    "labels.pseudo.per_label_weight.PF OA=0.2" "labels.pseudo.per_label_weight.Lateral OA=0.2"          # fold 0 check
 bash scripts/vast/train.sh teacher_pseudo "0 1 2 3 4"    # uses models/oof/effnet_b0_224.csv by default
 bash scripts/vast/submit.sh EXP-008 "teacher+student 10-model ensemble" \
     models/effnet_b0_224/fold*.pt models/student_pseudo/fold*.pt
