@@ -22,6 +22,24 @@ Training / inference pipeline for [rsna-knee-abnormality-detection](https://www.
 | EXP-009 | all 5 folds, rank-averaged | 0.867 | 0.893 | **0.914** |
 | EXP-010 | student, 50/50 pseudo-labels (fold 0) | 0.845 | 0.851 | — (stopped: worse) |
 
+Latest iteration report: [experiments/reports/ITER-01_2026-09-28.md](experiments/reports/ITER-01_2026-09-28.md).
+
+---
+
+## How every change is made (iteration loop)
+
+Full commands in [docs/WORKFLOW.md](docs/WORKFLOW.md); the same rules are in [CLAUDE.md](CLAUDE.md).
+
+| Step | Do | Command | Output |
+|---|---|---|---|
+| 1 | **Train 1 fold, one architecture**; gate vs current best fold 0 (OOF 0.865 / gold 0.876): continue only if OOF ≥ best − 0.003 and gold not down > 0.02 | `bash scripts/vast/train.sh <config> 0` | `models/<exp>/fold0.pt`, fold-0 OOF + gold |
+| 2 | **Submit fold 0, then the 5-fold ensemble** (train folds 1-4 in between); check the [inference time budget](docs/WORKFLOW.md#inference-time-budget-check-at-step-2) — 5 × EfficientNet-B0 ≈ 30–45 min of the 9 h limit | `bash scripts/vast/submit.sh EXP-NNN "<msg>" <ckpts>` | 2 LB scores |
+| 3 | **Update results + CV–LB** | `python scripts/track.py lb` · `python scripts/track.py add EXP-NNN --outputs runs/EXP-NNN` | `experiments/EXPERIMENTS.md` incl. *CV vs LB* |
+| 4 | **Back up models** (one Kaggle Model per architecture, one variation per fold), then destroy the GPU box | `python scripts/upload_models.py --model <slug> --exp EXP-NNN runs/EXP-NNN/models/<exp>/fold*.pt` | Kaggle Model variations |
+| 5 | **Report: result, CV–LB reading, keep/drop, next steps, cost** | copy `experiments/reports/TEMPLATE.md` → `ITER-NN_<date>.md` | iteration report |
+
+A change that fails the step-1 gate is recorded as NEGATIVE and goes straight to step 5.
+
 ---
 
 ## 0. What already exists on Kaggle (account `hlly34`)

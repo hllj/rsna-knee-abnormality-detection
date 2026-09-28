@@ -47,6 +47,8 @@ def upsert(df: pd.DataFrame, row: dict) -> pd.DataFrame:
     row = {k: ("" if v is None else str(v)) for k, v in row.items() if k in COLS}
     if (df.exp_id == row["exp_id"]).any():
         for k, v in row.items():
+            if k == "date":  # keep the date the experiment was first registered
+                continue
             if v != "":
                 df.loc[df.exp_id == row["exp_id"], k] = v
         return df
@@ -54,7 +56,7 @@ def upsert(df: pd.DataFrame, row: dict) -> pd.DataFrame:
 
 
 def cmd_add(a):
-    row = {"exp_id": a.exp_id, "date": dt.date.today().isoformat(), "kind": a.kind, "kernel": a.kernel,
+    row = {"exp_id": a.exp_id, "date": dt.date.today().isoformat(), "kind": a.kind or "", "kernel": a.kernel,
            "version": a.version, "notes": a.notes}
     metrics = [json.load(open(f)) for f in sorted(glob.glob(os.path.join(a.outputs or "", "**", "fold*_metrics.json"),
                                                             recursive=True))] if a.outputs else []
@@ -114,7 +116,40 @@ def render(df: pd.DataFrame = None) -> None:
     ]
     for _, r in df.fillna("").iterrows():
         lines.append("| " + " | ".join(str(r.get(c, "")).replace("|", "/") for c in show) + " |")
+    lines += cv_lb_section(df)
     open(MD, "w").write("\n".join(lines) + "\n")
+
+
+def cv_lb_section(df: pd.DataFrame) -> list:
+    """Every scored submission with its local metrics, deltas vs the previous one, and correlations."""
+    d = df.copy()
+    for c in ("oof_auc", "gold_auc_ensemble", "gold_auc_mean_fold", "lb_public"):
+        d[c] = pd.to_numeric(d[c], errors="coerce")
+    d["gold"] = d["gold_auc_ensemble"].fillna(d["gold_auc_mean_fold"])
+    d = d[d["lb_public"].notna()].reset_index(drop=True)
+    out = ["", "## CV vs LB", "",
+           "Scored submissions in order. `ΔOOF` / `ΔLB` are vs the previous row. Single-fold OOF values are measured "
+           "on different studies per fold, so compare experiments on the pooled 5-fold OOF where possible. With few "
+           "points Pearson r is dominated by big jumps (e.g. the dry run); Spearman is the fairer read.", "",
+           "| exp_id | folds | oof_auc | gold | lb_public | ΔOOF | Δgold | ΔLB | notes |", "|---|---|---|---|---|---|---|---|---|"]
+    prev = None
+    for _, r in d.iterrows():
+        def delta(c):
+            if prev is None or pd.isna(r[c]) or pd.isna(prev[c]):
+                return ""
+            return f"{r[c] - prev[c]:+.4f}"
+        out.append(f"| {r.exp_id} | {r.folds} | {r.oof_auc if pd.notna(r.oof_auc) else ''} | "
+                   f"{round(r.gold, 4) if pd.notna(r.gold) else ''} | {r.lb_public} | {delta('oof_auc')} | "
+                   f"{delta('gold')} | {delta('lb_public')} | {str(r.notes)[:80].replace('|', '/')} |")
+        prev = r
+    for c in ("oof_auc", "gold"):
+        v = d[[c, "lb_public"]].dropna()
+        if len(v) >= 3:
+            out.append(f"\nPearson r({c}, LB) = {v[c].corr(v['lb_public']):.3f} over {len(v)} submissions"
+                       f" (Spearman {v[c].corr(v['lb_public'], method='spearman'):.3f}).")
+        else:
+            out.append(f"\nr({c}, LB): need ≥ 3 submissions with both values (have {len(v)}).")
+    return out
 
 
 def main():
@@ -122,7 +157,8 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("add")
     p.add_argument("exp_id")
-    p.add_argument("--kind", default="train", choices=["train", "infer", "cache", "submit"])
+    p.add_argument("--kind", default=None, choices=["train", "infer", "cache", "submit"],
+                   help="set on first registration; omitted = keep the existing value")
     p.add_argument("--kernel", default="")
     p.add_argument("--version", default="")
     p.add_argument("--outputs", default=None, help="downloaded kernel output dir")
