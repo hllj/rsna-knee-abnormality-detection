@@ -1,0 +1,16 @@
+# Iteration 02 run 2: EfficientNet-B0 at 288 px, upsampled from the existing 256 px cache (no re-cache).
+# Evidence: 224/288 is the reported sweet spot for CNNs; storing more pixels (336 -> 384) was neutral for Raptor.
+exp_name: effnet_b0_288
+preprocess:
+  res: 256
+model:
+  backbone: tf_efficientnet_b0.ns_jft_in1k
+  img_size: 288
+windows:
+  k_train: 16
+  k_eval: 48
+training:
+  batch_size: 16
+  num_epochs: 15
+  lr: 1.0e-3
+  backbone_lr_mult: 0.3

@@ -2,7 +2,7 @@
 # Needs a 24 GB GPU at bs 8 with grad checkpointing.
 exp_name: coatnet2_384
 preprocess:
-  res: 384
+  res: 256                         # upsampled from the 256 cache (Raptor: stored 336 vs 384 was level)
   crop_mm: 140
 model:
   backbone: coatnet_rmlp_2_rw_384.sw_in12k_ft_in1k
@@ -12,7 +12,7 @@ windows:
   k_train: 12
   k_eval: 48
 training:
-  batch_size: 8
+  batch_size: 6                   # fits a 24 GB 3090 with grad checkpointing
   num_epochs: 16
   lr: 1.0e-3
   backbone_lr_mult: 0.03
