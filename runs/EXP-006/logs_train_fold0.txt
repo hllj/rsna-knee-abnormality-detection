@@ -1,0 +1,17 @@
+config=effnet_224 exp_name=effnet_b0_224 folds=[0] workers=16 extra=[training.num_epochs=15]
+== fold 0  Mon Sep 28 15:04:32 UTC 2026
+2026-09-28 15:04:39,966 - effnet_b0_224_fold0 - INFO - train 3479 | val 870 | gold 58
+2026-09-28 15:40:59,758 - effnet_b0_224_fold0 - INFO - [oof] macro AUC 0.8648 | ACL=0.881 MCL=0.833 Medial Meniscus=0.890 Lateral Meniscus=0.844 Medial OA=0.897 Lateral OA=0.829 PF OA=0.839 Effusion=0.875 Synovitis=0.861 Baker's=0.908 Contusion=0.860 Fracture=0.859
+2026-09-28 15:41:05,459 - effnet_b0_224_fold0 - INFO - [gold] macro AUC 0.8764 | ACL=0.926 MCL=0.909 Medial Meniscus=0.912 Lateral Meniscus=0.754 Medial OA=0.977 Lateral OA=0.857 PF OA=0.870 Effusion=0.867 Synovitis=0.753 Baker's=0.938 Contusion=0.910 Fracture=0.843
+{
+ "exp_name": "effnet_b0_224",
+ "folds": 1,
+ "oof_studies": 870,
+ "oof_auc": 0.86479,
+ "gold_auc_per_fold": [
+  0.8764
+ ],
+ "gold_auc_mean_fold": 0.87638,
+ "gold_auc_ensemble": 0.87638
+}
+next: bash scripts/vast/submit.sh EXP-NNN "<description>" models/effnet_b0_224/fold*.pt
