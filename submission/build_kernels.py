@@ -232,10 +232,14 @@ run(f"{CODE}/scripts/eval_labels.py", f"exp={CFG}", *EXTRA)   # last line = targ
         ("code", '''import torch
 n_gpu = max(1, torch.cuda.device_count())
 workers = max(2, os.cpu_count() // n_gpu)
-queue, running = list(FOLDS), []
+import psutil
+queue, running, failed = list(FOLDS), [], []
 os.makedirs("logs", exist_ok=True)
-t0 = time.time()
+t0 = last_mem = time.time()
 while queue or running:
+    if time.time() - last_mem > 600:   # RAM watchdog: EXP-002 v1 was OOM-killed (exit -9) after 107 min
+        vm = psutil.virtual_memory(); last_mem = time.time()
+        print(f"{(time.time() - t0) / 60:6.1f} min  RAM used {vm.used / 2**30:.1f}/{vm.total / 2**30:.1f} GiB")
     while queue and len(running) < n_gpu:
         fold = queue.pop(0)
         gpu = [g for g in range(n_gpu) if g not in [r[2] for r in running]][0]
@@ -250,8 +254,10 @@ while queue or running:
             running.remove(r)
             print(f"{(time.time() - t0) / 60:6.1f} min  fold {r[1]} exit {r[0].returncode}")
             print("".join(l for l in open(f"logs/fold{r[1]}.txt") if "macro AUC" in l or "Error" in l)[-2000:])
-            assert r[0].returncode == 0, open(f"logs/fold{r[1]}.txt").read()[-5000:]
-    time.sleep(20)'''),
+            if r[0].returncode != 0:   # keep the other folds going; report at the end
+                failed.append(r[1]); print(open(f"logs/fold{r[1]}.txt").read()[-3000:])
+    time.sleep(20)
+print("failed folds:", failed or "none")'''),
         ("md", f"## {4 if teacher else 3}. Cross-validation summary\n"
                "* **oof_auc** — all folds' out-of-fold predictions pooled, vs report targets (noise ≈ 0.003).\n"
                "* **gold_auc_ensemble** — the 5 fold models rank-averaged on the 58 gold studies, i.e. what the "

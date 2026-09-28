@@ -130,10 +130,13 @@ class TopKAverage(Callback):
 
 
 def make_loader(ds, cfg, shuffle):
+    # Only the train loader keeps its workers alive: persistent val workers (x2 loaders x parallel folds) each
+    # hold a forked copy of the process and exhausted host RAM on Kaggle's 2xT4 machine (EXP-002 v1, exit -9).
+    workers = cfg.resources.num_workers if shuffle else min(2, cfg.resources.num_workers)
     return DataLoader(
         ds, batch_size=cfg.training.batch_size if shuffle else max(1, cfg.training.batch_size // 2),
-        shuffle=shuffle, num_workers=cfg.resources.num_workers, pin_memory=True,
-        drop_last=shuffle, persistent_workers=cfg.resources.num_workers > 0,
+        shuffle=shuffle, num_workers=workers, pin_memory=True,
+        drop_last=shuffle, persistent_workers=shuffle and workers > 0,
     )
 
 
