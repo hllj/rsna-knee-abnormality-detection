@@ -1,0 +1,10 @@
+# DINOv2 ViT-S/14 (many public notebooks; base ≈ small here — capacity is not the bottleneck).
+exp_name: dinov2_small_224
+model:
+  backbone: vit_small_patch14_dinov2.lvd142m
+  img_size: 224
+  drop_path_rate: 0.1
+training:
+  batch_size: 8
+  lr: 5.0e-4
+  backbone_lr_mult: 0.05

@@ -1,0 +1,14 @@
+# Fast/efficient baseline (discussions: ResNet/EffNet @ 224-288 → 0.94+ LB with good labels).
+# Good for iterating on labels; also the efficiency-prize candidate.
+exp_name: effnet_b0_224
+model:
+  backbone: tf_efficientnet_b0.ns_jft_in1k
+  img_size: 224
+windows:
+  k_train: 16
+  k_eval: 48
+training:
+  batch_size: 16
+  num_epochs: 20
+  lr: 1.0e-3
+  backbone_lr_mult: 0.3

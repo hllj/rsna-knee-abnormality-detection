@@ -1,0 +1,14 @@
+{
+  "id": "hlly34/rsna-knee-inference",
+  "title": "rsna-knee-inference",
+  "code_file": "rsna-knee-inference.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": false,
+  "dataset_sources": ["hlly34/rsna-knee-code", "hlly34/rsna-knee-weights"],
+  "competition_sources": ["rsna-knee-abnormality-detection"],
+  "kernel_sources": [],
+  "model_sources": []
+}

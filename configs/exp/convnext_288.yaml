@@ -1,0 +1,12 @@
+# Diverse ensemble member (CNN inductive bias, different from CoAtNet/DINO).
+exp_name: convnext_small_288
+preprocess:
+  res: 288
+model:
+  backbone: convnext_small.fb_in22k_ft_in1k
+  img_size: 288
+  drop_path_rate: 0.2
+training:
+  batch_size: 8
+  lr: 5.0e-4
+  backbone_lr_mult: 0.1

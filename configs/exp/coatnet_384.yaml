@@ -1,0 +1,18 @@
+# Strong single model (discussions: CoAtNet-2 @ 352-384 → ~0.94 LB single fold).
+# Needs a 24 GB GPU at bs 8 with grad checkpointing.
+exp_name: coatnet2_384
+preprocess:
+  res: 384
+  crop_mm: 140
+model:
+  backbone: coatnet_rmlp_2_rw_384.sw_in12k_ft_in1k
+  img_size: 384
+  grad_checkpointing: true
+windows:
+  k_train: 12
+  k_eval: 48
+training:
+  batch_size: 8
+  num_epochs: 16
+  lr: 1.0e-3
+  backbone_lr_mult: 0.03
