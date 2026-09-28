@@ -9,7 +9,6 @@ Fold assignment.
 """
 import numpy as np
 import pandas as pd
-from iterstrat.ml_stratifiers import MultilabelStratifiedKFold
 
 from src.constants import ID_COL, LABELS
 
@@ -21,6 +20,9 @@ def gold_ids(train: pd.DataFrame) -> list:
 
 def make_folds(train: pd.DataFrame, targets: pd.DataFrame, n_folds: int = 5, seed: int = 42) -> pd.DataFrame:
     """Return DataFrame[StudyInstanceUID, fold]."""
+    # imported here: iterative-stratification is not in the offline Kaggle image, and gold_ids() is used there
+    from iterstrat.ml_stratifiers import MultilabelStratifiedKFold
+
     gold = set(gold_ids(train))
     ids = [u for u in train[ID_COL].astype(str) if u not in gold]
     y = (targets.reindex(ids).fillna(0).values >= 0.5).astype(int)
