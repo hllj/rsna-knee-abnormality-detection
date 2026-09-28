@@ -216,6 +216,8 @@ def main():
         gradient_clip_val=cfg.training.gradient_clip_val, devices=cfg.resources.devices,
         logger=loggers, callbacks=[topk, LearningRateMonitor("step")],
         enable_checkpointing=False, log_every_n_steps=20,
+        max_time=cfg.training.get("max_time"),  # e.g. "00:08:30:00": stop cleanly, still average/export/predict
+        check_val_every_n_epoch=int(cfg.training.get("val_every", 1)),
     )
     trainer.fit(module, make_loader(train_ds, cfg, True), val_loaders or None)
 

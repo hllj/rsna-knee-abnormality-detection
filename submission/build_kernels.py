@@ -39,6 +39,17 @@ EXPERIMENTS = {
                       "folds": [0, 1, 2, 3, 4], "extra": [], "teacher": "train-teacher"},
     "bench": {"id": "EXP-011", "what": "inference speed-up benchmark: old cache path vs streaming (threaded/raw "
               "DICOM reads, CPU/GPU overlap, one pass for all checkpoints) vs selective decode; EXP-009 weights"},
+    # ITER-02 fold-0 checks (docs/WORKFLOW.md step 1); bar = EXP-009 fold 0: OOF 0.865, gold 0.876
+    "iter02-a": {"id": "EXP-013/014", "what": "ITER-02 fold 0: EfficientNet-B0 @288 (EXP-013, GPU0) and ConvNeXt-S @288 "
+                 "(EXP-014, GPU1), both upsampled from the 256 cache",
+                 "jobs": [{"exp": "EXP-013", "gpu": 0, "train": ["effnet_288", 0, []]},
+                          {"exp": "EXP-014", "gpu": 1, "train": ["convnext_288", 0, []]}]},
+    "iter02-b": {"id": "EXP-015/016", "what": "ITER-02 fold 0: CoAtNet-RMLP-2 @384 (EXP-015, GPU0, 10 epochs, bs 4, "
+                 "val every 2, 9 h cap) and EXP-009 fold 0 re-scored with 64 vs 48 eval windows (EXP-016, GPU1)",
+                 "jobs": [{"exp": "EXP-015", "gpu": 0, "train": ["coatnet_384", 0, [
+                              "training.num_epochs=10", "training.batch_size=4", "training.val_every=2",
+                              "training.max_time=00:09:00:00"]]},
+                          {"exp": "EXP-016", "gpu": 1, "eval": ["effnet_b0_224/fold0.pt", [48, 64]]}]},
     "inference": {"id": "EXP-004", "what": "rank-average ensemble of all teacher + student folds",
                   "sources": ["train-teacher", "train-student"]},
 }
@@ -377,6 +388,85 @@ json.dump(EXP, open("/kaggle/working/experiment.json", "w"), indent=1)'''),
     ]
 
 
+def nb_jobs(key: str):
+    e = EXPERIMENTS[key]
+    rows = "\n".join(f"| {j['exp']} | GPU {j['gpu']} | " + (f"train `{j['train'][0]}` fold {j['train'][1]} {' '.join(j['train'][2])}"
+                     if "train" in j else f"re-score `{j['eval'][0]}` with k_eval {j['eval'][1]}") + " |" for j in e["jobs"])
+    return [
+        ("md", header(key, "RSNA Knee — ITER-02 fold-0 checks",
+                      "Each GPU runs its own queue of jobs (logs in `/kaggle/working/logs/<exp>.txt`). Training jobs "
+                      "save `models/<exp_name>/fold0.pt`, OOF + gold predictions and a CV json; the summary compares "
+                      "every job with the current best's fold 0 (EXP-009: OOF 0.865, gold 0.876).\n\n"
+                      "| Exp | GPU | Job |\n|---|---|---|\n" + rows)),
+        ("code", exp_json(key) + f"\nJOBS = {json.dumps(e['jobs'])}\n" + FIND),
+        ("code", PIP + "\n" + SETUP_DATA + '''
+CACHE = walk_find(lambda d, f: d if os.path.basename(d) == "cache_256" and any(x.endswith(".npz") for x in f[:50]) else None)
+print("cache:", CACHE, len(os.listdir(CACHE)), "studies")'''),
+        ("md", "## Run the job queues (one thread per GPU)"),
+        ("code", '''import threading, psutil, torch
+n_gpu = max(1, torch.cuda.device_count())
+workers = max(2, os.cpu_count() // n_gpu)
+os.makedirs("logs", exist_ok=True)
+t0 = time.time(); status = {}
+
+def command(j):
+    if "train" in j:
+        cfg, fold, extra = j["train"]
+        return [sys.executable, "-m", "src.models.train_pl", f"exp={cfg}", f"fold={fold}",
+                f"resources.num_workers={workers}", f"paths.cache_dir={CACHE}", *extra]
+    ck_rel, ks = j["eval"]
+    ck = walk_find(lambda d, f: os.path.join(d, os.path.basename(ck_rel)) if d.endswith(os.path.dirname(ck_rel))
+                   and os.path.basename(ck_rel) in f else None)
+    return [sys.executable, f"{CODE}/scripts/eval_ckpt.py", "--ckpt", ck, "--k_eval", *map(str, ks),
+            "--out", f"/kaggle/working/eval_{j['exp']}.json", f"paths.data_dir={DATA}", f"paths.cache_dir={CACHE}"]
+
+def gpu_worker(gpu):
+    for j in [j for j in JOBS if j["gpu"] % n_gpu == gpu]:
+        t = time.time()
+        with open(f"logs/{j['exp']}.txt", "w") as log:
+            rc = subprocess.run(command(j), env=dict(ENV, CUDA_VISIBLE_DEVICES=str(gpu)), stdout=log,
+                                stderr=subprocess.STDOUT).returncode
+        status[j["exp"]] = (rc, round((time.time() - t) / 60, 1))
+        print(f"{(time.time() - t0) / 60:6.1f} min  {j['exp']} on GPU {gpu} exit {rc} ({status[j['exp']][1]} min)", flush=True)
+
+threads = [threading.Thread(target=gpu_worker, args=(g,)) for g in range(n_gpu)]
+[t.start() for t in threads]
+while any(t.is_alive() for t in threads):
+    time.sleep(600)
+    vm = psutil.virtual_memory()
+    print(f"{(time.time() - t0) / 60:6.1f} min  RAM {vm.used / 2**30:.1f}/{vm.total / 2**30:.1f} GiB  running", flush=True)
+print(status)'''),
+        ("md", "## Summary vs EXP-009 fold 0 (OOF 0.865 / gold 0.876)"),
+        ("code", '''import pandas as pd
+rows = []
+for j in JOBS:
+    r = {"exp": j["exp"], "exit": status.get(j["exp"], ("?", 0))[0], "minutes": status.get(j["exp"], ("?", 0))[1]}
+    if "train" in j:
+        from src.config import get_config
+        name = get_config([f"exp={j['train'][0]}", *j["train"][2]]).exp_name
+        f = f"models/{name}/fold{j['train'][1]}_metrics.json"
+        if os.path.exists(f):
+                m = json.load(open(f))
+                run(f"{CODE}/scripts/merge_oof.py", "--exp", name, "--oof_dir", "models/oof", "--train", f"{COMP}/train.csv",
+                    "--targets", "models/oof/report_targets.csv")
+                cv = json.load(open(f"models/oof/{name}_cv.json"))
+                r.update(name=name, backbone=m["backbone"], img=m["img_size"], epochs=m["epochs"], oof=cv.get("oof_auc"),
+                         gold=cv.get("gold_auc_mean_fold"), lat_men_oof=cv.get("oof_per_label", {}).get("Lateral Meniscus"),
+                         lat_men_gold=cv.get("gold_per_label", {}).get("Lateral Meniscus"), topk=m.get("topk_scores"))
+    else:
+        f = f"/kaggle/working/eval_{j['exp']}.json"
+        if os.path.exists(f):
+            for k, v in json.load(open(f))["results"].items():
+                r[f"oof@k{k}"] = v["oof_auc"]; r[f"gold@k{k}"] = v["gold_auc"]
+                r[f"lat_men_oof@k{k}"] = v["oof_per_label"].get("Lateral Meniscus")
+    rows.append(r)
+summary = pd.DataFrame(rows)
+print(summary.to_string())
+EXP.update(summary=summary.to_dict("records"), minutes=round((time.time() - t0) / 60, 1))
+json.dump(EXP, open("/kaggle/working/experiment.json", "w"), indent=1, default=str)'''),
+    ]
+
+
 def metadata(key: str, gpu: bool, internet: bool, datasets=(), kernels=()):
     return {"id": f"{USER}/rsna-knee-{key}", "title": f"rsna-knee-{key}", "code_file": f"rsna-knee-{key}.ipynb",
             "language": "python", "kernel_type": "notebook", "is_private": True, "enable_gpu": gpu,
@@ -413,6 +503,9 @@ if __name__ == "__main__":
         EXPERIMENTS["inference"]["what"] = args.inference_what
     write("cache-pack", nb_pack(), metadata("cache-pack", False, False, (), ["cache"]))
     write("bench", nb_bench(), metadata("bench", True, False, (f"{USER}/rsna-knee-weights",), ()))
+    write("iter02-a", nb_jobs("iter02-a"), metadata("iter02-a", True, True, LABEL_DATASETS, ["cache"]))
+    write("iter02-b", nb_jobs("iter02-b"),
+          metadata("iter02-b", True, True, (*LABEL_DATASETS, f"{USER}/rsna-knee-weights"), ["cache"]))
     write("dryrun", nb_dryrun(), metadata("dryrun-train", True, True, LABEL_DATASETS))
     write("cache", nb_cache(), metadata("cache", False, True))
     write("train-teacher", nb_train("train-teacher"), metadata("train-teacher", True, True, LABEL_DATASETS, ["cache"]))
