@@ -25,7 +25,8 @@ Training / inference pipeline for [rsna-knee-abnormality-detection](https://www.
 
 Iteration reports: [ITER-01 baseline](experiments/reports/ITER-01_2026-09-28.md) ·
 [ITER-01b inference speed-up](experiments/reports/ITER-01b_inference_speedup.md) ·
-[ITER-02 plan (resolution / backbone)](experiments/reports/ITER-02_plan.md).
+[ITER-02 plan (resolution / backbone)](experiments/reports/ITER-02_plan.md) ·
+[ITER-02 fold-0 results: ConvNeXt-S @288 wins](experiments/reports/ITER-02_2026-09-29.md).
 
 ---
 
