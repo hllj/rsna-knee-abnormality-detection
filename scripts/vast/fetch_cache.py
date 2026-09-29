@@ -13,7 +13,9 @@ import os
 import re
 import subprocess
 import tarfile
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 
 def kaggle_get(kernel: str, pattern: str, out: str) -> None:
@@ -34,6 +36,8 @@ def main():
     ap.add_argument("--data", default="data")
     ap.add_argument("--user", required=True)
     ap.add_argument("--retries", type=int, default=5)
+    ap.add_argument("--parallel", type=int, default=4,
+                    help="shards downloaded at once (one request per shard; slow links benefit a lot)")
     a = ap.parse_args()
     kernel = f"{a.user}/rsna-knee-cache-pack"
     pack, dest = os.path.join(a.data, "_pack"), os.path.join(a.data, "processed")
@@ -47,28 +51,35 @@ def main():
     done_file = os.path.join(pack, "extracted.txt")
     done = set(open(done_file).read().split()) if os.path.exists(done_file) else set()
 
-    for i, s in enumerate(man["shards"]):
-        if s["file"] in done:
-            continue
-        path = os.path.join(pack, s["file"])
+    lock = threading.Lock()
+
+    def fetch(i_s):
+        i, sh = i_s
+        path = os.path.join(pack, sh["file"])
+        t = time.time()
         for attempt in range(1, a.retries + 1):
-            t = time.time()
             try:
-                kaggle_get(kernel, "^" + re.escape(s["file"]) + "$", pack)
-                if os.path.getsize(path) == s["bytes"] and sha256(path) == s["sha256"]:
+                kaggle_get(kernel, "^" + re.escape(sh["file"]) + "$", pack)
+                if os.path.getsize(path) == sh["bytes"] and sha256(path) == sh["sha256"]:
                     break
-                print(f"  {s['file']}: size/checksum mismatch (attempt {attempt})")
+                print(f"  {sh['file']}: size/checksum mismatch (attempt {attempt})", flush=True)
             except subprocess.CalledProcessError as e:
-                print(f"  {s['file']}: download failed (attempt {attempt}): {e}")
+                print(f"  {sh['file']}: download failed (attempt {attempt}): {e}", flush=True)
             time.sleep(10 * attempt)
         else:
-            raise SystemExit(f"could not fetch {s['file']}")
+            raise SystemExit(f"could not fetch {sh['file']}")
         with tarfile.open(path) as tar:
             tar.extractall(dest)
-        os.remove(path)  # keep disk usage at ~1 shard + the extracted cache
-        with open(done_file, "a") as f:
-            f.write(s["file"] + "\n")
-        print(f"[{i + 1}/{len(man['shards'])}] {s['file']} {s['bytes'] / 2**30:.2f} GiB in {time.time() - t:.0f}s")
+        os.remove(path)  # keep disk usage bounded
+        with lock:
+            with open(done_file, "a") as f:
+                f.write(sh["file"] + "\n")
+            print(f"[{i + 1}/{len(man['shards'])}] {sh['file']} {sh['bytes'] / 2**30:.2f} GiB in {time.time() - t:.0f}s",
+                  flush=True)
+
+    todo = [(i, sh) for i, sh in enumerate(man["shards"]) if sh["file"] not in done]
+    with ThreadPoolExecutor(max(1, a.parallel)) as ex:
+        list(ex.map(fetch, todo))
 
     n = len([f for f in os.listdir(os.path.join(dest, "cache_256")) if f.endswith(".npz")])
     assert n == man["studies"], (n, man["studies"])
