@@ -6,7 +6,7 @@ Final submission deadline 2026-10-22 (team merge / entry 2026-10-15). 5 submissi
 ## Every change follows this iteration loop (docs/WORKFLOW.md has the commands)
 
 1. **Train 1 fold first, one architecture** — `bash scripts/vast/train.sh <config> 0 [overrides]`. Compare with the
-   current best's fold 0 (EXP-009: OOF 0.865, gold-58 0.876). Gate: continue only if fold-0 OOF ≥ best − 0.003 and
+   current best's fold 0 (EXP-020: OOF 0.872, gold-58 0.896). Gate: continue only if fold-0 OOF ≥ best − 0.003 and
    gold-58 did not drop by > ~0.02; otherwise record as NEGATIVE and go to step 5.
 2. **Submit 1 fold and the 5-fold ensemble** — `scripts/vast/submit.sh EXP-NNN "<msg>" <ckpts>` for fold 0, then train
    folds 1-4 and submit all 5 (optionally a blend with the current best). Keep one submission/day spare.
@@ -32,8 +32,11 @@ Final submission deadline 2026-10-22 (team merge / entry 2026-10-15). 5 submissi
 * Run `pytest -m "not slow"` (and `pytest -m slow` for pipeline changes) before committing code.
 
 ## Where things are
-* Current best: **EXP-009**, EfficientNet-B0 @224, 5 folds rank-averaged, public LB **0.914**
-  (weights: Kaggle dataset `hlly34/rsna-knee-weights`, backups: Kaggle Model `hlly34/rsna-knee-effnet-b0-224`).
+* Current best: **EXP-020**, ConvNeXt-S @288, 5 folds rank-averaged, public LB **0.926**; fold-0 bar for the
+  next gate: OOF 0.872, gold 0.896 (`runs/EXP-020/`). Weights: Kaggle dataset `hlly34/rsna-knee-weights`;
+  backups: Kaggle Models `hlly34/rsna-knee-convnext-s-288` and `hlly34/rsna-knee-effnet-b0-224` (EXP-009, LB 0.914).
+* submit.sh verifies the notebook used exactly the uploaded checkpoints (unique upload marker) — never bypass it;
+  EXP-017 was scored on stale weights before this check existed.
 * Registry: `experiments/registry.csv` (source) → `experiments/EXPERIMENTS.md` (generated). Reports: `experiments/reports/`.
 * Training cache: Kaggle notebook `hlly34/rsna-knee-cache-pack` (14 shards, 14.5 GiB) → `scripts/vast/get_data.sh`.
 * vast.ai: CLI `vastai` with the owner's API key; SSH key `~/.ssh/id_rsa` is registered. Preferred box: 1× RTX 3090,

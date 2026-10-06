@@ -1,0 +1,37 @@
+config=convnext_288 exp_name=convnext_small_288 folds=[0 1 2 3 4] workers=16 extra=[training.batch_size=4 training.accumulate_grad_batches=2]
+== fold 0  Tue Oct  6 10:34:25 UTC 2026
+2026-10-06 10:34:33,013 - convnext_small_288_fold0 - INFO - train 3479 | val 870 | gold 58
+2026-10-06 12:01:16,426 - convnext_small_288_fold0 - INFO - [oof] macro AUC 0.8719 | ACL=0.875 MCL=0.843 Medial Meniscus=0.908 Lateral Meniscus=0.860 Medial OA=0.903 Lateral OA=0.834 PF OA=0.831 Effusion=0.877 Synovitis=0.862 Baker's=0.931 Contusion=0.871 Fracture=0.869
+2026-10-06 12:01:26,989 - convnext_small_288_fold0 - INFO - [gold] macro AUC 0.8958 | ACL=0.958 MCL=0.950 Medial Meniscus=0.941 Lateral Meniscus=0.807 Medial OA=0.984 Lateral OA=0.820 PF OA=0.853 Effusion=0.916 Synovitis=0.716 Baker's=0.964 Contusion=0.942 Fracture=0.897
+== fold 1  Tue Oct  6 12:01:29 UTC 2026
+2026-10-06 12:01:36,784 - convnext_small_288_fold1 - INFO - train 3480 | val 869 | gold 58
+2026-10-06 13:32:54,145 - convnext_small_288_fold1 - INFO - [oof] macro AUC 0.8880 | ACL=0.897 MCL=0.837 Medial Meniscus=0.911 Lateral Meniscus=0.879 Medial OA=0.889 Lateral OA=0.878 PF OA=0.855 Effusion=0.883 Synovitis=0.878 Baker's=0.925 Contusion=0.886 Fracture=0.939
+2026-10-06 13:33:07,540 - convnext_small_288_fold1 - INFO - [gold] macro AUC 0.8938 | ACL=0.979 MCL=0.934 Medial Meniscus=0.947 Lateral Meniscus=0.809 Medial OA=0.981 Lateral OA=0.812 PF OA=0.848 Effusion=0.929 Synovitis=0.700 Baker's=0.969 Contusion=0.945 Fracture=0.871
+== fold 2  Tue Oct  6 13:33:10 UTC 2026
+2026-10-06 13:33:17,402 - convnext_small_288_fold2 - INFO - train 3479 | val 870 | gold 58
+2026-10-06 14:59:05,701 - convnext_small_288_fold2 - INFO - [oof] macro AUC 0.8812 | ACL=0.870 MCL=0.853 Medial Meniscus=0.912 Lateral Meniscus=0.836 Medial OA=0.925 Lateral OA=0.863 PF OA=0.849 Effusion=0.887 Synovitis=0.875 Baker's=0.931 Contusion=0.885 Fracture=0.892
+2026-10-06 14:59:15,938 - convnext_small_288_fold2 - INFO - [gold] macro AUC 0.8962 | ACL=0.958 MCL=0.902 Medial Meniscus=0.953 Lateral Meniscus=0.847 Medial OA=0.978 Lateral OA=0.810 PF OA=0.831 Effusion=0.914 Synovitis=0.736 Baker's=0.967 Contusion=0.947 Fracture=0.908
+== fold 3  Tue Oct  6 14:59:18 UTC 2026
+2026-10-06 14:59:25,594 - convnext_small_288_fold3 - INFO - train 3479 | val 870 | gold 58
+2026-10-06 16:39:22,143 - convnext_small_288_fold3 - INFO - [oof] macro AUC 0.8742 | ACL=0.868 MCL=0.839 Medial Meniscus=0.894 Lateral Meniscus=0.850 Medial OA=0.890 Lateral OA=0.872 PF OA=0.829 Effusion=0.874 Synovitis=0.868 Baker's=0.922 Contusion=0.881 Fracture=0.905
+2026-10-06 16:39:33,970 - convnext_small_288_fold3 - INFO - [gold] macro AUC 0.8952 | ACL=0.972 MCL=0.946 Medial Meniscus=0.953 Lateral Meniscus=0.809 Medial OA=0.975 Lateral OA=0.822 PF OA=0.820 Effusion=0.945 Synovitis=0.717 Baker's=0.962 Contusion=0.942 Fracture=0.881
+== fold 4  Tue Oct  6 16:39:37 UTC 2026
+2026-10-06 16:39:45,742 - convnext_small_288_fold4 - INFO - train 3479 | val 870 | gold 58
+2026-10-06 18:25:53,350 - convnext_small_288_fold4 - INFO - [oof] macro AUC 0.8692 | ACL=0.879 MCL=0.834 Medial Meniscus=0.927 Lateral Meniscus=0.876 Medial OA=0.885 Lateral OA=0.870 PF OA=0.847 Effusion=0.826 Synovitis=0.820 Baker's=0.924 Contusion=0.854 Fracture=0.888
+2026-10-06 18:26:12,593 - convnext_small_288_fold4 - INFO - [gold] macro AUC 0.9006 | ACL=0.961 MCL=0.952 Medial Meniscus=0.952 Lateral Meniscus=0.816 Medial OA=0.983 Lateral OA=0.826 PF OA=0.860 Effusion=0.933 Synovitis=0.730 Baker's=0.976 Contusion=0.937 Fracture=0.882
+{
+ "exp_name": "convnext_small_288",
+ "folds": 5,
+ "oof_studies": 4349,
+ "oof_auc": 0.87639,
+ "gold_auc_per_fold": [
+  0.8958,
+  0.8938,
+  0.8962,
+  0.8952,
+  0.9006
+ ],
+ "gold_auc_mean_fold": 0.89632,
+ "gold_auc_ensemble": 0.90069
+}
+next: bash scripts/vast/submit.sh EXP-NNN "<description>" models/convnext_small_288/fold*.pt

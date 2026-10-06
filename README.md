@@ -11,8 +11,8 @@ Training / inference pipeline for [rsna-knee-abnormality-detection](https://www.
 | [docs/VAST.md](docs/VAST.md) | details of the rented-GPU workflow below |
 | [experiments/EXPERIMENTS.md](experiments/EXPERIMENTS.md) | every experiment: CV, gold-58, public LB |
 
-**Current best: EXP-009 — EfficientNet-B0 @224, 5 folds, rank-averaged → public LB 0.914**
-(OOF 0.867 vs report labels, gold-58 0.893). Full history in [experiments/EXPERIMENTS.md](experiments/EXPERIMENTS.md).
+**Current best: EXP-020 — ConvNeXt-S @288, 5 folds, rank-averaged → public LB 0.926**
+(OOF 0.876 vs report labels, gold-58 ensemble 0.901). Previous best: EXP-009 EfficientNet-B0 @224, LB 0.914. Full history in [experiments/EXPERIMENTS.md](experiments/EXPERIMENTS.md).
 
 | Exp | What | OOF | Gold-58 | Public LB |
 |---|---|---|---|---|
@@ -21,12 +21,16 @@ Training / inference pipeline for [rsna-knee-abnormality-detection](https://www.
 | EXP-008 | fold 1 only (same setup) | 0.874 | 0.877 | 0.905 |
 | EXP-009 | all 5 folds, rank-averaged | 0.867 | 0.893 | **0.914** |
 | EXP-010 | student, 50/50 pseudo-labels (fold 0) | 0.845 | 0.851 | — (stopped: worse) |
-| EXP-012 | EXP-009 checkpoints via fast streaming inference (~11 min instead of ~30) | 0.867 | 0.893 | **0.914** |
+| EXP-012 | EXP-009 checkpoints via fast streaming inference (~11 min instead of ~30) | 0.867 | 0.893 | 0.914 |
+| EXP-019 | ConvNeXt-S @288 fold 0 | 0.872 | 0.896 | 0.923 |
+| EXP-021 | ConvNeXt-S @288 fold 1 | 0.888 | 0.894 | 0.924 |
+| **EXP-020** | **ConvNeXt-S @288, all 5 folds rank-averaged** | **0.876** | **0.901** | **0.926** |
 
 Iteration reports: [ITER-01 baseline](experiments/reports/ITER-01_2026-09-28.md) ·
 [ITER-01b inference speed-up](experiments/reports/ITER-01b_inference_speedup.md) ·
 [ITER-02 plan (resolution / backbone)](experiments/reports/ITER-02_plan.md) ·
-[ITER-02 fold-0 results: ConvNeXt-S @288 wins](experiments/reports/ITER-02_2026-09-29.md).
+[ITER-02 fold-0 results: ConvNeXt-S @288 wins](experiments/reports/ITER-02_2026-09-29.md) ·
+[ITER-03 ConvNeXt 5 folds: LB 0.926](experiments/reports/ITER-03_2026-10-06.md).
 
 ---
 
