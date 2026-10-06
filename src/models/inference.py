@@ -227,6 +227,8 @@ def main():
     ap.add_argument("--ckpts", nargs="+", required=True)
     ap.add_argument("--weights", nargs="*", type=float, default=None)
     ap.add_argument("--rank_average", action="store_true")
+    ap.add_argument("--family_weights", default=None,
+                    help='blend weights per model family (cfg exp_name), e.g. "convnext_small_288=0.7,effnet_b0_224=0.3"')
     ap.add_argument("--mode", choices=["stream", "cache"], default="stream")
     ap.add_argument("--selective", type=int, default=1, help="decode only sampled slices (1) or every slice (0)")
     ap.add_argument("--pct_stride", type=int, default=0, help="extra slices for the intensity window (0 = none)")
@@ -267,6 +269,14 @@ def main():
 
     preds = [rank01(p) if a.rank_average else p for p in preds]
     w = np.asarray(a.weights or [1.0] * len(preds), dtype=float)
+    if a.family_weights:  # "convnext_small_288=0.7,effnet_b0_224=0.3": family weight split evenly over its ckpts
+        fam = dict(kv.split("=") for kv in a.family_weights.split(","))
+        names = [torch.load(c, map_location="cpu", weights_only=False, mmap=True)["cfg"]["exp_name"] for c in ckpts]
+        missing = sorted(set(names) - set(fam))
+        assert not missing, f"no family weight for {missing}"
+        w = np.asarray([float(fam[n]) / names.count(n) for n in names])
+        print("[infer] family weights:", {n: round(float(fam[n]), 3) for n in sorted(set(names))},
+              "| ckpts per family:", {n: names.count(n) for n in sorted(set(names))})
     final = sum(wi * p for wi, p in zip(w, preds)) / w.sum()
     sub = pd.DataFrame(final, columns=LABELS)
     sub.insert(0, ID_COL, ids)

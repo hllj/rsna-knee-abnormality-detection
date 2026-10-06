@@ -25,6 +25,7 @@ Training / inference pipeline for [rsna-knee-abnormality-detection](https://www.
 | EXP-019 | ConvNeXt-S @288 fold 0 | 0.872 | 0.896 | 0.923 |
 | EXP-021 | ConvNeXt-S @288 fold 1 | 0.888 | 0.894 | 0.924 |
 | **EXP-020** | **ConvNeXt-S @288, all 5 folds rank-averaged** | **0.876** | **0.901** | **0.926** |
+| EXP-022 | blend: ConvNeXt-S 5 folds (0.7) + EfficientNet-B0 5 folds (0.3) | 0.879 | 0.902 | 0.925 (neutral) |
 
 Iteration reports: [ITER-01 baseline](experiments/reports/ITER-01_2026-09-28.md) ·
 [ITER-01b inference speed-up](experiments/reports/ITER-01b_inference_speedup.md) ·

@@ -62,7 +62,7 @@ EXPERIMENTS = {
 # shared code cells
 FIND = '''import glob, json, os, subprocess, sys, time
 
-def walk_find(pred, root="/kaggle/input", max_depth=6):
+def walk_find(pred, root="/kaggle/input", max_depth=7):
     """Depth-limited search of the attached inputs that never descends into the DICOM trees."""
     root = root.rstrip("/")
     for dirpath, dirnames, filenames in os.walk(root):
@@ -295,7 +295,7 @@ print(EXP)'''),
     return cells
 
 
-def nb_inference(weights: str = None):
+def nb_inference(weights: str = None, family_weights: str = None):
     srcs = ", ".join(f"`{USER}/rsna-knee-{s}` ({EXPERIMENTS[s]['id']})" for s in EXPERIMENTS["inference"]["sources"])
     if weights:
         srcs = f"the weights dataset `{weights}` (uploaded by `scripts/vast/submit.sh`)"
@@ -304,7 +304,7 @@ def nb_inference(weights: str = None):
                       f"Scores the hidden test set with every fold model attached from {srcs}. Test DICOMs go "
                       "through exactly the same preprocessing as training (`src/dataset/dicom.py`); each model's "
                       "predictions are converted to per-finding ranks (AUC only depends on order) and averaged.")),
-        ("code", exp_json("inference") + "\n" + FIND),
+        ("code", exp_json("inference") + f"\nFAMILY_WEIGHTS = {family_weights!r}\n" + FIND),
         ("md", "## 1. Offline dependencies and checkpoints\nThe pylibjpeg wheels come from a training notebook's "
                "output (needed for JPEG-compressed DICOMs)."),
         ("code", '''WHEELS = walk_find(lambda d, f: d if os.path.basename(d) == "wheels" and any(x.endswith(".whl") for x in f) else None)
@@ -321,6 +321,7 @@ assert CKPTS, "attach the training notebooks' outputs"'''),
         ("code", '''t0 = time.time()
 from src.models.inference import main
 sys.argv = ["inference", "--data_dir", COMP, "--ckpts", *CKPTS, "--rank_average", "--cache_dir", "/tmp/knee_cache",
+            *(["--family_weights", FAMILY_WEIGHTS] if FAMILY_WEIGHTS else []),
             "--workers", str(os.cpu_count()), "--out", "/kaggle/working/submission.csv"]
 main()
 print(f"inference {time.time() - t0:.0f}s")'''),
@@ -329,6 +330,7 @@ sub = pd.read_csv("/kaggle/working/submission.csv")
 files = glob.glob("/tmp/knee_cache/*/*.npz")   # only written in --mode cache (stream keeps stacks in memory)
 EXP.update(models=len(CKPTS), test_studies=len(sub), seconds=round(time.time() - t0),
            ckpts=[os.path.join(os.path.basename(os.path.dirname(c)), os.path.basename(c)) for c in CKPTS],
+           ckpt_paths=CKPTS, family_weights=FAMILY_WEIGHTS,
            upload_ids=[])
 walk_find(lambda d, f: EXP["upload_ids"].extend(sorted(x for x in f if x.startswith("UPLOAD_"))) and None)
 if files:
@@ -503,6 +505,10 @@ if __name__ == "__main__":
                          "(scripts/vast/submit.sh), instead of the Kaggle training notebooks' outputs")
     ap.add_argument("--inference-id", default=None, help="experiment id for the inference notebook, e.g. EXP-006")
     ap.add_argument("--inference-what", default=None, help="one-line description of that inference experiment")
+    ap.add_argument("--model-sources", nargs="*", default=None,
+                    help="Kaggle Model variations to attach, e.g. hlly34/rsna-knee-effnet-b0-224/pyTorch/exp-009-fold0/1")
+    ap.add_argument("--extra-datasets", nargs="*", default=[], help="extra datasets to attach (e.g. hlly34/rsna-knee-wheels)")
+    ap.add_argument("--family-weights", default=None, help='e.g. "convnext_small_288=0.7,effnet_b0_224=0.3"')
     args = ap.parse_args()
     if args.inference_id:
         EXPERIMENTS["inference"]["id"] = args.inference_id
@@ -518,10 +524,16 @@ if __name__ == "__main__":
     write("train-teacher", nb_train("train-teacher"), metadata("train-teacher", True, True, LABEL_DATASETS, ["cache"]))
     write("train-student", nb_train("train-student"),
           metadata("train-student", True, True, LABEL_DATASETS, ["cache", "train-teacher"]))
-    if args.weights_dataset:
+    if args.model_sources is not None:   # checkpoints straight from Kaggle Models (no re-upload)
         EXPERIMENTS["inference"]["sources"] = []
-        write("inference", nb_inference(weights=args.weights_dataset),
-              metadata("inference", True, False, (args.weights_dataset,), ()))
+        meta = metadata("inference", True, False, tuple(args.extra_datasets), ())
+        meta["model_sources"] = list(args.model_sources)
+        write("inference", nb_inference(weights="Kaggle Models: " + ", ".join(sorted({m.split("/")[1] for m in args.model_sources})),
+                                        family_weights=args.family_weights), meta)
+    elif args.weights_dataset:
+        EXPERIMENTS["inference"]["sources"] = []
+        write("inference", nb_inference(weights=args.weights_dataset, family_weights=args.family_weights),
+              metadata("inference", True, False, (args.weights_dataset, *args.extra_datasets), ()))
     else:
         write("inference", nb_inference(), metadata("inference", True, False, (), EXPERIMENTS["inference"]["sources"]))
     print("written:", sorted(k for k in os.listdir(HERE) if os.path.isdir(os.path.join(HERE, k))))
