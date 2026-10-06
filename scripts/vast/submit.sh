@@ -32,7 +32,11 @@ cp models/oof/*_cv.json "$STAGE/" 2>/dev/null || true
 "$PY" -m pip download -q -d "$STAGE/wheels" --only-binary=:all: --no-deps --python-version 3.12 \
   --platform manylinux2014_x86_64 --platform manylinux_2_28_x86_64 pylibjpeg pylibjpeg-libjpeg pylibjpeg-openjpeg
 printf '{"title": "rsna-knee-weights", "id": "%s", "licenses": [{"name": "CC-BY-NC-4.0"}]}' "$DS" > "$STAGE/dataset-metadata.json"
-FIRST_CKPT="$(basename "${CKPTS[0]}")"
+# unique marker: the wait below must see THIS version, not an older one that has a same-named fold0.pt
+# (EXP-017 was scored on the previous version's weights because of exactly that race)
+MARKER="UPLOAD_${EXP_ID}_$(date +%s).txt"
+echo "$EXP_ID $MSG" > "$STAGE/$MARKER"
+EXPECTED=$(for c in "${CKPTS[@]}"; do echo "$(basename "$(dirname "$c")")/$(basename "$c")"; done | sort | tr '\n' ' ')
 if kaggle datasets files "$DS" >/dev/null 2>&1; then
   kaggle datasets version -p "$STAGE" -r zip -m "$EXP_ID $MSG" --delete-old-versions
 else
@@ -41,7 +45,7 @@ fi
 rm -rf "$STAGE"
 echo "waiting for the dataset version to be processed..."
 sleep 60
-until kaggle datasets files "$DS" --page-size 200 2>/dev/null | grep -q "$FIRST_CKPT"; do sleep 20; done
+until kaggle datasets files "$DS" --page-size 200 2>/dev/null | grep -q "$MARKER"; do sleep 20; done
 sleep 30
 
 echo "== 2. inference notebook for $EXP_ID"
@@ -57,6 +61,13 @@ for i in $(seq 1 30); do kaggle kernels status "$KERNEL" 2>&1 | grep -qE "RUNNIN
 until s=$(kaggle kernels status "$KERNEL" 2>&1); echo "$s" | grep -qE "COMPLETE|ERROR|CANCEL"; do sleep 60; done
 echo "$s"
 echo "$s" | grep -q COMPLETE || { kaggle kernels output "$KERNEL" -p /tmp/infer_log >/dev/null; tail -50 /tmp/infer_log/*.log; exit 1; }
+
+# verify the run used exactly the uploaded checkpoints from this upload before spending a submission
+rm -rf /tmp/infer_check && kaggle kernels output "$KERNEL" -p /tmp/infer_check --file-pattern "experiment.json" >/dev/null
+GOT=$("$PY" -c "import json;e=json.load(open('/tmp/infer_check/experiment.json'));print(' '.join(sorted(e.get('ckpts',[]))),'|',' '.join(e.get('upload_ids',[])))")
+echo "notebook used: $GOT"
+[ "${GOT%% |*} " = "$EXPECTED" ] || { echo "ABORT: notebook checkpoints != uploaded ($EXPECTED)"; exit 1; }
+echo "$GOT" | grep -q "$MARKER" || { echo "ABORT: notebook did not see upload marker $MARKER (stale dataset version)"; exit 1; }
 
 "$PY" scripts/track.py add "$EXP_ID" --kind submit --kernel "$KERNEL" --version "$VER" \
   --notes "$MSG | $(printf '%s ' "${CKPTS[@]}")"
