@@ -91,6 +91,10 @@ def _e2e(fake_comp, tmp_path, monkeypatch, exp, extra):
     monkeypatch.setattr(sys, "argv", ["train"] + ov + ["fold=0", "training.num_epochs=1"])
     train_pl.main()
     assert len(pd.read_csv("models/oof/report_targets.csv")) == 1  # an existing ruler is never overwritten
+    os.remove(f"models/oof/smoke_{exp}_gold_fold0.csv")
+    monkeypatch.setattr(sys, "argv", ["train"] + ov + ["fold=0", "predict_only=true"])
+    train_pl.main()  # re-creates the prediction files from the exported fold, no training
+    assert os.path.exists(f"models/oof/smoke_{exp}_gold_fold0.csv")
     from src.models import inference
 
     monkeypatch.setattr(sys, "argv", ["infer", "--data_dir", str(fake_comp / "raw"), "--ckpts",

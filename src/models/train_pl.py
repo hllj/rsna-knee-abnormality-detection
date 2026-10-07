@@ -33,6 +33,7 @@ from src.dataset.datasets import KneeStudyDataset
 from src.dataset.folds import gold_ids, make_folds
 from src.evaluation.metrics import macro_auc
 from src.labeling.blend import build_targets
+from src.models.inference import forward_safe
 from src.models.model import build_model
 from src.utils import set_seed, setup_logging
 
@@ -195,7 +196,9 @@ def predict(model: nn.Module, loader: DataLoader, device) -> pd.DataFrame:
     uids, preds = [], []
     for b in loader:
         with torch.autocast(device_type=device.type, enabled=device.type == "cuda"):
-            logits = model(b["x"].to(device), b["slot"].to(device), b["mask"].to(device), b["pos"].to(device))
+            # OOM-safe: CoAtNet @384 x 78 windows x 4 studies does not fit one forward pass on a 24 GB GPU
+            logits = forward_safe(model, b["x"].to(device), b["slot"].to(device), b["mask"].to(device),
+                                  b["pos"].to(device))
         preds.append(torch.sigmoid(logits.float()).cpu().numpy())
         uids += list(b["uid"])
     return pd.DataFrame(np.concatenate(preds), columns=LABELS).assign(**{ID_COL: uids})[[ID_COL] + LABELS]
@@ -286,11 +289,17 @@ def main():
         max_time=cfg.training.get("max_time"),  # e.g. "00:08:30:00": stop cleanly, still average/export/predict
         check_val_every_n_epoch=int(cfg.training.get("val_every", 1)),
     )
-    trainer.fit(module, make_loader(train_ds, cfg, True), val_loaders or None)
-
     export = os.path.join(out_dir, f"fold{cfg.fold}.pt")
-    torch.save({"state_dict": module.model.state_dict(), "cfg": OmegaConf.to_container(cfg, resolve=True)}, export)
-    log.info(f"saved {export}")
+    if cfg.get("predict_only"):  # re-create the OOF / gold files + metrics of an exported fold without training
+        module.model.load_state_dict(torch.load(export, map_location="cpu", weights_only=False)["state_dict"])
+        log.info(f"predict_only: loaded {export}")
+    else:
+        trainer.fit(module, make_loader(train_ds, cfg, True), val_loaders or None)
+        torch.save({"state_dict": module.model.state_dict(), "cfg": OmegaConf.to_container(cfg, resolve=True)},
+                   export)
+        log.info(f"saved {export}")
+    if torch.cuda.is_available():  # release the training allocator cache before the big eval batches
+        torch.cuda.empty_cache()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     metrics = {}
