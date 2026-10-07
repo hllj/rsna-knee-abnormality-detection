@@ -79,3 +79,25 @@ bash scripts/vast/train.sh coatnet_384 0 \
 * Backup: Kaggle Model `hlly34/rsna-knee-convnext-s-288-dense` → `exp-024-fold0`; local `runs/EXP-024/`.
 * Next: submit fold 0 (expect ≥ EXP-019's 0.923), train folds 1–4 (~4 × 73 min ≈ 5 h ≈ $1.5–2), submit the 5-fold
   ensemble; then CoAtNet @384 on the dense cache.
+
+### EXP-026 / EXP-027 — dense ConvNeXt-S @288, folds 1–4 and the 5-fold ensemble (2026-10-08)
+| Fold | dense OOF | dense gold | 72-slice OOF / gold | min |
+|---|---|---|---|---|
+| 0 | 0.8745 | 0.9037 | 0.8719 / 0.8958 | 73 |
+| 1 | 0.8867 | 0.9027 | 0.8880 / 0.8938 | 85 |
+| 2 | 0.8844 | 0.9046 | 0.8812 / 0.8962 | 84 |
+| 3 | 0.8768 | 0.9051 | 0.8742 / 0.8952 | 84 |
+| 4 | 0.8717 | 0.9064 | 0.8692 / 0.9006 | 84 |
+| **5-fold** | **0.8781** pooled | **0.9104** ensemble | 0.8764 / 0.9007 | |
+
+| Submission | What | Public LB |
+|---|---|---|
+| EXP-025 | dense fold 0 | 0.926 (72-slice fold 0: 0.923) |
+| EXP-029 | dense fold 1 | 0.925 (72-slice fold 1: 0.924) |
+| **EXP-027** | **dense 5-fold** | **0.930** (72-slice 5-fold: 0.926) — **new best** |
+
+* Dense wins gold on every fold (+0.006..+0.010) and OOF on 4/5; 5-fold: +0.0017 OOF, +0.010 gold, **+0.004 LB**.
+* Ensembling gain grew: single dense folds 0.925–0.926 → 5-fold 0.930 (72-slice: 0.923–0.924 → 0.926).
+* Verification caught a near-miss: notebook v13 loaded only 4/5 checkpoints (exp-026-fold1 v1 did not mount while
+  its v2 was registering) → not submitted; v14 with fold1 v2 loaded all 5 and was submitted.
+* Next: CoAtNet-2 @384 dense fold 0 (EXP-028, running), gate vs dense fold 0 (0.8745 / 0.9037).

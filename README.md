@@ -11,8 +11,8 @@ Training / inference pipeline for [rsna-knee-abnormality-detection](https://www.
 | [docs/VAST.md](docs/VAST.md) | details of the rented-GPU workflow below |
 | [experiments/EXPERIMENTS.md](experiments/EXPERIMENTS.md) | every experiment: CV, gold-58, public LB |
 
-**Current best: EXP-020 — ConvNeXt-S @288, 5 folds, rank-averaged → public LB 0.926**
-(OOF 0.876 vs report labels, gold-58 ensemble 0.901). Previous best: EXP-009 EfficientNet-B0 @224, LB 0.914. Full history in [experiments/EXPERIMENTS.md](experiments/EXPERIMENTS.md).
+**Current best: EXP-027 — ConvNeXt-S @288 on the dense 88-slice cache, 5 folds, rank-averaged → public LB 0.930**
+(OOF 0.878 vs report labels, gold-58 ensemble 0.910). Previous: EXP-020 (72-slice cache) 0.926, EXP-009 EfficientNet 0.914. Full history in [experiments/EXPERIMENTS.md](experiments/EXPERIMENTS.md).
 
 | Exp | What | OOF | Gold-58 | Public LB |
 |---|---|---|---|---|
@@ -26,6 +26,9 @@ Training / inference pipeline for [rsna-knee-abnormality-detection](https://www.
 | EXP-021 | ConvNeXt-S @288 fold 1 | 0.888 | 0.894 | 0.924 |
 | **EXP-020** | **ConvNeXt-S @288, all 5 folds rank-averaged** | **0.876** | **0.901** | **0.926** |
 | EXP-022 | blend: ConvNeXt-S 5 folds (0.7) + EfficientNet-B0 5 folds (0.3) | 0.879 | 0.902 | 0.925 (neutral) |
+| EXP-025 | ConvNeXt-S @288 **dense cache** (88 slices) fold 0 | 0.875 | 0.904 | 0.926 |
+| EXP-029 | ConvNeXt-S @288 dense fold 1 | 0.887 | 0.903 | 0.925 |
+| **EXP-027** | **ConvNeXt-S @288 dense cache, 5 folds rank-averaged** | **0.878** | **0.910** | **0.930** |
 
 Iteration reports: [ITER-01 baseline](experiments/reports/ITER-01_2026-09-28.md) ·
 [ITER-01b inference speed-up](experiments/reports/ITER-01b_inference_speedup.md) ·
