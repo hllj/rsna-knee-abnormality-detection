@@ -211,3 +211,82 @@ which failed for us (EXP-010) and for goodpjw. None of these claims can be check
 3. **Teacher-ensemble pseudo-labels (EXP-038), not self-distillation.** Use the out-of-fold rank-average of
    *different* families (ConvNeXt dense + CoAtNet) as the teacher, mixed 50/50 into the soft labels; train a fresh
    student. This is Raymond Yuen's and Archit Konde's route. Score it only against unmixed `report_targets.csv`.
+
+---
+
+## 6. Data-pipeline deep dive: Raptor and goodpjw's reader vs ours (2026-10-07)
+
+**Sources:**
+- Raptor: inference and trainer notebooks, plus the dataset pages of its 10 corpus variants. Each page states the
+  geometry and the public LB of a one-variable change.
+- goodpjw's reader: the full code in `goodpjw2008/rsna-knee-2-5d-convnext-reader`
+  (`preprocess.py`, `knee.py`, `train.py`, `make_labels.py`).
+- Our pipeline: `src/dataset/dicom.py`, `src/dataset/datasets.py`.
+
+### 6.1 Side by side
+| | **Raptor** (CoAtNet-2 @384, single model 0.924–0.935) | **goodpjw reader** (ConvNeXt-T, 5 folds 0.930) | **Ours** (ConvNeXt-S, 5 folds 0.930) |
+|---|---|---|---|
+| Caching unit | per study, fixed 44 / 64 / 80 slots | **per series**, every native slice (≤ 64, else linspace) | per study, fixed 72 / 88 slots |
+| Slots | 5: sag-fluid, sag-2nd, cor-fluid, cor-2nd, axial (finespacing 22/18/15/10/15) | 6 (plane × fat-sat) | 6 (plane × fluid; dense 26/14/20/10/14/4) |
+| Series choice for a slot | preference order (fluid first) | **largest slice count at eval; random candidate in training** | **first row in CSV order** (`choose_series`) |
+| Slice order | IPP · normal | IPP · normal, canonical direction per plane | IPP along dominant axis; sagittal reversed for left knees |
+| In-plane orientation | none | **full: transpose / flip rows / flip columns to a fixed LPS frame (from IOP)** | left–right mirror for cor/ax only (laterality); no transpose or vertical flip |
+| Laterality | none (raw) | none explicit (LPS frame) | canonical right knee |
+| Span | 2–98% | 4–96% (window centres) | 4–96% |
+| In-plane scale | 140 mm crop → **336 px stored (0.417 mm/px)**, upsampled to 384 | resampled to 0.4 mm/px in a 153.6 mm frame; 0.92 crop → 256 px (**0.55 mm/px**) | 140 mm crop → **256 px stored (0.547 mm/px)**, upsampled to 288 |
+| Intensity | per-series 2–98 percentile | per-series 1–99.5 percentile | per-series 1–99 percentile |
+| Train windows | random centres with replacement, k 12 | **one random centre in each of k equal bins** per series, k 8 | uniform random choice from valid centres, k 16 |
+| Eval windows | every position (62 / 78) | evenly spaced, 12 per series (72 total) | evenly spaced, 48 of 86 |
+| Augmentation | ±10% gain only | rotation ±12°, scale ±12%, shift ±6%, gamma exp(±0.25), gain ±10%, all shared per series, on GPU | affine (shift 0.06, scale 0.1, rotation 10°), brightness/contrast 0.2, gamma 0.8–1.2, shared per study; window dropout 0.1 |
+| Model extras | tanh attention-MIL | slice-position embedding + 2-layer transformer over all windows, then per-finding attention | slot embedding + gated attention-MIL |
+| Optimisation | backbone 3e-5 / head 1e-3, OneCycle, 16 epochs, batch 8, bf16, clip 3, pos_weight BCE | backbone **1e-4** / head 5e-4, cosine + 1 warm-up epoch, 14 epochs, batch 8, clip 3, **EMA 0.998 (evaluated with EMA)** | backbone 5e-5 / head 5e-4, 15 epochs, batch 8, clip 1, no EMA, top-3 average |
+| Labels | own LLM soft labels (public: `dreaddevelopment/rsna-knee-labels`, no gold rows) | mean of 4 public tables (steven v4, pilkwang v2, lixin, qwen), clipped 0.01–0.99 | blend of 3 + silence priors |
+| Folds | none (all data); epoch chosen on gold | GroupKFold **by normalised report text** | fixed `folds_5.csv` |
+
+### 6.2 Measured evidence (single-variable, public LB, from Raptor's dataset pages)
+| Change | LB | Takeaway |
+|---|---|---|
+| 140 → 170 mm crop at 336 px (0.417 → 0.506 mm/px) | 0.926 → **0.917** | in-plane detail beats coverage |
+| Store at 384 instead of 336 (0.417 → 0.365 mm/px) | 0.926 → 0.926 | detail saturates around 0.4 mm/px |
+| 44 slices, 6–94% → 2–98% (thinner) | 0.926 → 0.917 | wider span only helps with more slices |
+| 64 slices over 2–98%, 62 windows | 0.928 | |
+| 80 slices over 2–98%, 78 windows | 0.932 | 1.2% of the stack per slice is the best measured |
+| Same weights, 42 → 62 eval windows | 0.924 → 0.927 | score every window position |
+
+Other teams' measurements:
+
+| Pipeline | Change | Result | Takeaway |
+|---|---|---|---|
+| Ziad (pooled attention head, like ours) | denser slices | −0.0045 | density pays for full-coverage readers, not for heads that already see the span |
+| Ziad | 140 → 110 mm crop | ±0 | |
+| Thread 745759 (public baseline) | sort slices by IPP instead of filename | +0.028 | we already sort by IPP |
+
+### 6.3 Our own measurements today
+- **Duplicated slices from fixed-count sampling.**
+  - Sag-FS (26 slots): 33% of studies contain repeated consecutive slices, because their series is shorter than
+    26 within the span. **10% of sag-FS training windows have a repeated channel.**
+  - Cor-FS: 14% of studies, 4% of windows. Other slots: about 0.
+  - Measured on 300 cached studies of `cache_256_dense`.
+- **Several candidate series per slot.**
+  - 13.6% of (study, plane, fluid) slots have ≥ 2 series, and **44% of studies** have at least one such slot.
+  - By slot: axial non-fat-sat 35%, sagittal non-fat-sat 20%, coronal non-fat-sat 17%, sagittal fat-sat 12%.
+  - We cache one series per slot, picked by CSV order, so the extra series are never seen.
+- **Identical template reports.** 223 studies (5%, 52 groups) share an identical report, and 48 groups are split
+  across our folds. Same labels, different images, so there is no image leakage. Low priority.
+
+### 6.4 What to adopt, ranked
+| # | Change | Evidence | Cost |
+|---|---|---|---|
+| D1 | **Finer in-plane scale: rebuild the dense cache at 336 px, 140 mm (0.417 mm/px)**; train ConvNeXt-S @336 and CoAtNet @384 from it | Raptor 170 mm (0.506 mm/px) cost −0.009; we are at 0.547 mm/px | Cache ×1.72 → ~31 GB, over Kaggle's 20 GB output cap, so build in 2 parts (studies split in half, like Raptor's corpus + ext). ConvNeXt @336 ≈ 1.35× train time (~100 min/fold on a 3090) |
+| D2 | **Series choice: the most slices among exact matches** (not CSV order); also cache a 2nd candidate where one exists and pick at random in training (TTA option at inference) | goodpjw; 44% of studies affected | `choose_series` + a cache rebuild (do it together with D1) |
+| D3 | **Per-slot sample count capped at the native slice count** (no duplicate slices); mask the unused slots | 33% of studies hit on sag-FS | small change in `sample_indices` / cache build; together with D1 |
+| D4 | **Stratified random window centres** (one random centre per equal bin, per slot) instead of uniform random choice; eval at every centre (k_eval = all) where time allows | goodpjw; Raptor window-count table | ~20 lines in `datasets.py`; no cache change; 1 fold to test |
+| D5 | **Full in-plane canonicalisation** (transpose / vertical flip to a fixed LPS frame from IOP) | goodpjw. Prevalence of non-standard in-plane orientation is unknown: add a header-only scan of IOP for all 24k series to the cache-build notebook first | small, in the cache build |
+| D6 | Training recipe from the reader: **EMA 0.998 with eval on EMA weights**, backbone LR 1e-4 + cosine, clip 3 | goodpjw | = EXP-030 (config) |
+| D7 | Labels: add a 4th public source (qwen or lixin, as goodpjw does) and consider Dread's public labels as a 5th. Dread's labels have no gold rows, so judge them by OOF and LB only | goodpjw, Raptor | = EXP-035 |
+| — | Not worth it: wider crop (Raptor −0.009); storing above 0.4 mm/px (level); more slices for our pooled head without more coverage (Ziad −0.0045) | | |
+
+**Suggested order:**
+1. D4 + D6 on the current cache, one fold each. They are cheap and need no rebuild.
+2. One Kaggle cache rebuild that bundles D1 + D2 + D3 (+ D5 after the IOP scan): `cache_336_dense_v2`, 2 parts.
+3. ConvNeXt-S @336 fold 0 on it against the 0.8745 / 0.9037 bar, then CoAtNet @384 on it.
