@@ -1,0 +1,33 @@
+# ITER-04 run 5: CoAtNet-RMLP-2 @384 on the DENSE cache (88 slices), sized for a 24 GB RTX 3090.
+# Raptor (public) measured this backbone at bs 8 x 12 windows + grad checkpointing = 23.7 GB -> too tight for a 3090
+# (24576 MiB), so bs 6 (~18-19 GB). Head LR 1e-3, backbone 3e-5 (mult 0.03), wd 0.02 as Raptor; k_eval 24 as Raptor.
+# ITER-02 (T4) failed only for budget reasons: 9 h cap mid-schedule + validation every 2nd epoch.
+exp_name: coatnet2_384_dense
+paths:
+  cache_dir: ${paths.processed_data}/cache_256_dense
+preprocess:
+  res: 256
+  slots:
+    sag_fs: {plane: Sagittal, fluid: 1, n: 26}
+    sag_t1: {plane: Sagittal, fluid: 0, n: 14}
+    cor_fs: {plane: Coronal, fluid: 1, n: 20}
+    cor_t1: {plane: Coronal, fluid: 0, n: 10}
+    ax_fs: {plane: Axial, fluid: 1, n: 14}
+    ax_t1: {plane: Axial, fluid: 0, n: 4}
+model:
+  backbone: coatnet_rmlp_2_rw_384.sw_in12k_ft_in1k
+  img_size: 384
+  grad_checkpointing: true
+  channels_last: true
+windows:
+  k_train: 12
+  k_eval: 24
+training:
+  batch_size: 6
+  accumulate_grad_batches: 1
+  num_epochs: 12
+  lr: 1.0e-3
+  backbone_lr_mult: 0.03
+  weight_decay: 0.02
+  val_every: 1
+  top_k_average: 3
