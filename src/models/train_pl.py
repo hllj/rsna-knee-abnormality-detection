@@ -255,12 +255,14 @@ def main():
         aug_cfg=OmegaConf.to_container(cfg.augmentation) if cfg.augmentation.enabled else None,
         window_dropout=cfg.augmentation.window_dropout, **common,
     )
+    # per-epoch validation may use fewer windows than the final OOF / gold predictions (k_eval)
+    k_val = cfg.windows.k_eval if cfg.windows.get("k_val") is None else int(cfg.windows.k_val)
     val_loaders, module.val_names = [], []
     if va_ids:
-        val_loaders.append(make_loader(KneeStudyDataset(va_ids, k=cfg.windows.k_eval, **common), cfg, False))
+        val_loaders.append(make_loader(KneeStudyDataset(va_ids, k=k_val, **common), cfg, False))
         module.val_names.append("report")
     if cfg.evaluation.gold_eval and gd_ids:
-        val_loaders.append(make_loader(KneeStudyDataset(gd_ids, k=cfg.windows.k_eval, **common), cfg, False))
+        val_loaders.append(make_loader(KneeStudyDataset(gd_ids, k=k_val, **common), cfg, False))
         module.val_names.append("gold")
     monitor = cfg.training.monitor if va_ids else "val_auc_gold"
 

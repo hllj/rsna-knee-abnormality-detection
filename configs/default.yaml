@@ -102,6 +102,7 @@ model:
 windows:
   k_train: 16
   k_eval: 48                       # 0 = every window position (study layout)
+  k_val: null                      # windows for per-epoch validation (null = k_eval); final OOF/gold use k_eval
   sampling: uniform                # uniform | stratified (one random centre per equal bin)
   cross_slot: false                # Raptor: windows over the concatenated stack, centred-on-empty masked
   span: [0.04, 0.96]               # series layout: window centres over this part of each series

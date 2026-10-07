@@ -22,13 +22,14 @@ model:
   img_size: 384
   head: tanh_mil                   # LayerNorm -> Linear(F,256)-Tanh-Dropout(0.2)-Linear(256,12), softmax per finding
   slot_embedding: false
-  drop_rate: 0.0
+  drop_rate: 0.2                   # attention-head dropout (Raptor: Dropout 0.2 after Tanh)
   drop_path_rate: 0.0
   grad_checkpointing: true
   channels_last: true
 windows:
   k_train: 12
-  k_eval: 0                        # 0 = every window position (78 for 80 slices)
+  k_eval: 0                        # 0 = every window position (78 for 80 slices): final OOF / gold / test
+  k_val: 24                        # per-epoch validation (Raptor's trainer validates at k_eval 24)
   sampling: uniform                # random centres (with replacement when k > available)
   cross_slot: true                 # Raptor windows run over the concatenated stack
 augmentation:
