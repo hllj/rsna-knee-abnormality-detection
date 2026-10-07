@@ -28,6 +28,7 @@ model:
   slot_embedding: true
   drop_rate: 0.2
   drop_path_rate: 0.1
+  grad_checkpointing: true         # batch 8 x 48 windows @256 OOMs a 24 GB 3090 without it (9.1 GiB with)
   channels_last: true
 windows:
   k_train: 8                       # per series slot
