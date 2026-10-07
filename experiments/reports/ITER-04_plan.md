@@ -32,8 +32,8 @@ density, not span, is the lever. Strongest single lever in the public evidence; 
 ## 2. Steps
 | # | What | Where | Cost | Exp |
 |---|---|---|---|---|
-| 1 | Build dense cache (CPU, ~2–2.5 h) | Kaggle `rsna-knee-cache-dense` | 0 GPU, 0 $ | EXP-023 |
-| 2 | Pack into ~1 GB tar shards | Kaggle `rsna-knee-cache-dense-pack` | 0 | EXP-023 |
+| 1 | Build dense cache (CPU, ~2–2.5 h) — **done** | Kaggle `rsna-knee-cache-dense` | 0 GPU, 0 $ | EXP-023 |
+| 2 | Pack into ~1 GB tar shards — **done: 4,407 studies, 17.83 GiB, 18 shards** | Kaggle `rsna-knee-cache-dense-pack` | 0 | EXP-023 |
 | 3 | ConvNeXt-S @288 dense, **fold 0** — gate vs EXP-020 fold 0 (OOF 0.872 / gold 0.896) | vast.ai 3090 | ~1.6 h ≈ $0.4 | EXP-024 |
 | 4 | If it passes: folds 1–4, submit fold 0 + 5-fold | vast.ai 3090 | ~6.5 h ≈ $1.6 | EXP-025/026 |
 | 5 | CoAtNet-RMLP-2 @384 fold 0 (on dense cache if 3 passes) | vast.ai 3090 | ~3.5–4 h ≈ $1 | EXP-027 |
