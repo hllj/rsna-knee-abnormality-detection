@@ -302,7 +302,7 @@ print(EXP)'''),
     return cells
 
 
-def nb_inference(weights: str = None, family_weights: str = None):
+def nb_inference(weights: str = None, family_weights: str = None, infer_args: str = None):
     srcs = ", ".join(f"`{USER}/rsna-knee-{s}` ({EXPERIMENTS[s]['id']})" for s in EXPERIMENTS["inference"]["sources"])
     if weights:
         srcs = f"the weights dataset `{weights}` (uploaded by `scripts/vast/submit.sh`)"
@@ -311,10 +311,10 @@ def nb_inference(weights: str = None, family_weights: str = None):
                       f"Scores the hidden test set with every fold model attached from {srcs}. Test DICOMs go "
                       "through exactly the same preprocessing as training (`src/dataset/dicom.py`); each model's "
                       "predictions are converted to per-finding ranks (AUC only depends on order) and averaged.")),
-        ("code", exp_json("inference") + f"\nFAMILY_WEIGHTS = {family_weights!r}\n" + FIND),
+        ("code", exp_json("inference") + f"\nFAMILY_WEIGHTS = {family_weights!r}\nINFER_ARGS = {(infer_args or '').split()!r}\n" + FIND),
         ("md", "## 1. Offline dependencies and checkpoints\nThe pylibjpeg wheels come from a training notebook's "
                "output (needed for JPEG-compressed DICOMs)."),
-        ("code", '''WHEELS = walk_find(lambda d, f: d if os.path.basename(d) == "wheels" and any(x.endswith(".whl") for x in f) else None)
+        ("code", '''WHEELS = walk_find(lambda d, f: d if any(x.startswith("pylibjpeg") and x.endswith(".whl") for x in f) else None)
 if WHEELS:
     # --no-deps: never let an offline wheel (e.g. numpy) replace the image's own packages
     subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-index", "--no-deps", "--find-links", WHEELS,
@@ -322,13 +322,18 @@ if WHEELS:
 CKPTS = []
 walk_find(lambda d, f: CKPTS.extend(os.path.join(d, x) for x in sorted(f) if x.endswith(".pt")) and None)
 print("wheels:", WHEELS)
+try:
+    import pylibjpeg, libjpeg, openjpeg  # noqa: F401  JPEG / JPEG-2000 DICOM decoders
+    print("JPEG decoders: OK")
+except ImportError as e:
+    print("JPEG decoders MISSING:", e)
 for c in CKPTS: print(" ", c)
 assert CKPTS, "attach the training notebooks' outputs"'''),
         ("md", "## 2. Predict and rank-average"),
         ("code", '''t0 = time.time()
 from src.models.inference import main
 sys.argv = ["inference", "--data_dir", COMP, "--ckpts", *CKPTS, "--rank_average", "--cache_dir", "/tmp/knee_cache",
-            *(["--family_weights", FAMILY_WEIGHTS] if FAMILY_WEIGHTS else []),
+            *(["--family_weights", FAMILY_WEIGHTS] if FAMILY_WEIGHTS else []), *INFER_ARGS,
             "--workers", str(os.cpu_count()), "--out", "/kaggle/working/submission.csv"]
 main()
 print(f"inference {time.time() - t0:.0f}s")'''),
@@ -388,7 +393,7 @@ def nb_bench():
                       "| C_stream_selective | + decode only the ~72 sampled slices; intensity window from them |\n"
                       "| D_stream_selective_pct4 | as C, plus every 4th slice for the intensity window |")),
         ("code", exp_json("bench") + "\n" + FIND),
-        ("code", '''WHEELS = walk_find(lambda d, f: d if os.path.basename(d) == "wheels" and any(x.endswith(".whl") for x in f) else None)
+        ("code", '''WHEELS = walk_find(lambda d, f: d if any(x.startswith("pylibjpeg") and x.endswith(".whl") for x in f) else None)
 if WHEELS:
     subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-index", "--no-deps", "--find-links", WHEELS,
                     "pylibjpeg", "pylibjpeg-libjpeg", "pylibjpeg-openjpeg"], check=False)
@@ -516,6 +521,8 @@ if __name__ == "__main__":
                     help="Kaggle Model variations to attach, e.g. hlly34/rsna-knee-effnet-b0-224/pyTorch/exp-009-fold0/1")
     ap.add_argument("--extra-datasets", nargs="*", default=[], help="extra datasets to attach (e.g. hlly34/rsna-knee-wheels)")
     ap.add_argument("--family-weights", default=None, help='e.g. "convnext_small_288=0.7,effnet_b0_224=0.3"')
+    ap.add_argument("--infer-args", default=None,
+                    help='extra src/models/inference.py args, e.g. "--split train --limit 64" (debug a failed hidden run)')
     args = ap.parse_args()
     if args.inference_id:
         EXPERIMENTS["inference"]["id"] = args.inference_id
@@ -540,7 +547,7 @@ if __name__ == "__main__":
         meta = metadata("inference", True, False, tuple(args.extra_datasets), ())
         meta["model_sources"] = list(args.model_sources)
         write("inference", nb_inference(weights="Kaggle Models: " + ", ".join(sorted({m.split("/")[1] for m in args.model_sources})),
-                                        family_weights=args.family_weights), meta)
+                                        family_weights=args.family_weights, infer_args=args.infer_args), meta)
     elif args.weights_dataset:
         EXPERIMENTS["inference"]["sources"] = []
         write("inference", nb_inference(weights=args.weights_dataset, family_weights=args.family_weights),

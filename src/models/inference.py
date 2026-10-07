@@ -151,6 +151,26 @@ class Member:
         return self.k, self.img, self.mean, self.std
 
 
+OOM_SPLITS = 0
+
+
+def forward_safe(model, x, slot, mask) -> torch.Tensor:
+    """model(x, slot, mask) for a batch of studies; on CUDA OOM, retry on halves (heavy backbones such as
+    CoAtNet @384 do not fit 8 studies x k windows in one forward pass on a 16 GB T4)."""
+    global OOM_SPLITS
+    try:
+        return model(x, slot, mask)
+    except torch.cuda.OutOfMemoryError:
+        if x.shape[0] == 1:
+            raise
+    # retry outside the except block: the live exception would keep the failed pass's activations alive
+    OOM_SPLITS += 1
+    torch.cuda.empty_cache()
+    h = x.shape[0] // 2
+    return torch.cat([forward_safe(model, x[:h], slot[:h], mask[:h]),
+                      forward_safe(model, x[h:], slot[h:], mask[h:])])
+
+
 @torch.no_grad()
 def predict_batch(groups: Dict[tuple, List[Member]], stacks: List[dict], device) -> Dict[str, np.ndarray]:
     """Run every member on one batch of studies; windows are built once per input contract."""
@@ -170,7 +190,7 @@ def predict_batch(groups: Dict[tuple, List[Member]], stacks: List[dict], device)
         slot = torch.from_numpy(np.stack(slots)).to(device)
         mask = torch.ones(b, k, dtype=torch.bool, device=device)
         for mem in members:
-            out[mem.path] = torch.sigmoid(mem.model(x, slot, mask).float()).cpu().numpy()
+            out[mem.path] = torch.sigmoid(forward_safe(mem.model, x, slot, mask).float()).cpu().numpy()
     return out
 
 
@@ -184,6 +204,7 @@ def run_stream(ids: List[str], dicom_dir: str, series: pd.DataFrame, ckpts: List
     row = {u: i for i, u in enumerate(ids)}
     preds = {m.path: np.zeros((len(ids), len(LABELS)), np.float32) for m in members}
     t0, stack_s, gpu_s, n = time.time(), 0.0, 0.0, 0
+    coverage = []  # fraction of valid slots per study (empty slots = missing or undecodable series)
     for mems in by_pp.values():
         groups: Dict[tuple, List[Member]] = {}
         for m in mems:
@@ -202,6 +223,7 @@ def run_stream(ids: List[str], dicom_dir: str, series: pd.DataFrame, ckpts: List
 
         for uid, d, sec in stream_stacks(ids, dicom_dir, series, mems[0].pp, workers, opts):
             buf.append((uid, d))
+            coverage.append(float(np.mean(d["valid"])))
             stack_s += sec
             n += 1
             if len(buf) >= batch:
@@ -213,6 +235,14 @@ def run_stream(ids: List[str], dicom_dir: str, series: pd.DataFrame, ckpts: List
             flush()
     print(f"[stream] done: {n} studies, {len(members)} models, {time.time() - t0:.0f}s wall, "
           f"{stack_s / max(n, 1):.2f} s/study CPU (x{workers} workers), GPU {gpu_s:.0f}s", flush=True)
+    if device.type == "cuda":
+        print(f"[stream] slot coverage mean {np.mean(coverage):.3f} | studies < 50% {np.mean(np.array(coverage) < 0.5):.3f}", flush=True)
+        print(f"[stream] peak GPU memory {torch.cuda.max_memory_allocated() / 2**30:.1f} GiB | "
+              f"OOM batch splits {OOM_SPLITS}", flush=True)
+    for path, p in preds.items():
+        bad = int((~np.isfinite(p)).any(1).sum())
+        if bad:
+            print(f"[stream] WARNING {os.path.basename(path)}: {bad} studies with non-finite predictions", flush=True)
     return preds
 
 
@@ -237,16 +267,21 @@ def main():
     ap.add_argument("--cache_dir", default=None)
     ap.add_argument("--workers", type=int, default=os.cpu_count() or 4)
     ap.add_argument("--out", default="submission.csv")
+    ap.add_argument("--split", choices=["test", "train"], default="test",
+                    help="train = reproduce the hidden-test run on training studies (debugging)")
+    ap.add_argument("--limit", type=int, default=0, help="score only this many (random, non-gold) studies")
     a = ap.parse_args()
 
     ckpts = sorted({p for pat in a.ckpts for p in glob.glob(pat, recursive=True)})
     assert ckpts, f"no checkpoints match {a.ckpts}"
     a.data_dir = a.data_dir or find_competition_root()
     assert a.data_dir, "competition data not found; pass --data_dir"
-    test = pd.read_csv(os.path.join(a.data_dir, "test.csv"), dtype={ID_COL: str})
-    series = pd.read_csv(os.path.join(a.data_dir, "test_series.csv"), dtype={ID_COL: str, "SeriesInstanceUID": str})
+    test = pd.read_csv(os.path.join(a.data_dir, f"{a.split}.csv"), dtype={ID_COL: str})
+    series = pd.read_csv(os.path.join(a.data_dir, f"{a.split}_series.csv"), dtype={ID_COL: str, "SeriesInstanceUID": str})
+    if a.limit:
+        test = test.sample(min(a.limit, len(test)), random_state=0)
     ids = test[ID_COL].tolist()
-    dicom_dir = os.path.join(a.data_dir, "test_series")
+    dicom_dir = os.path.join(a.data_dir, f"{a.split}_series")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     opts = {"selective": bool(a.selective), "pct_stride": a.pct_stride, "threads": a.threads}
 
