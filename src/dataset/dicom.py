@@ -39,13 +39,15 @@ class SlotSpec:
 
     name: str
     plane: str
-    fluid: int
+    fluid: int  # 1 / 0, or -1 = any series of the plane
     n: int
+    fat: Optional[int] = None  # match Fat_Suppression instead of Fluid_Sensitive (reader-style slots)
 
 
 def slot_specs_from_cfg(slots_cfg) -> List[SlotSpec]:
     """Build SlotSpecs from the `preprocess.slots` config mapping (order is preserved)."""
-    return [SlotSpec(k, v["plane"], int(v["fluid"]), int(v["n"])) for k, v in slots_cfg.items()]
+    return [SlotSpec(k, v["plane"], int(v.get("fluid", -1)), int(v.get("n", 0)),
+                     None if v.get("fat") is None else int(v["fat"])) for k, v in slots_cfg.items()]
 
 
 def _slice_sort_key(ds) -> Tuple[int, float]:
@@ -175,7 +177,7 @@ def _geometry(dss, spacing, shape) -> Dict:
         # IPP is the first voxel (a corner): walk half the image to reach the centre
         half = row_cos * spacing[1] * (w / 2) + col_cos * spacing[0] * (h / 2)
         geo["centres"] = np.stack([np.asarray(d.ImagePositionPatient, dtype=np.float64) + half for d in dss])
-        geo["row_cos"] = row_cos
+        geo["row_cos"], geo["col_cos"] = row_cos, col_cos
     except (AttributeError, ValueError, TypeError):
         pass
     return geo
@@ -262,15 +264,36 @@ def sample_indices(n_avail: int, n: int, span: Sequence[float] = (0.04, 0.96)) -
     return np.linspace(lo, max(lo, hi), n).round().astype(int)
 
 
-def choose_series(series: pd.DataFrame, spec: SlotSpec, used: set) -> Optional[str]:
-    """Pick the series for a slot: exact plane+fluid match first, then any same-plane series."""
+def choose_series(series: pd.DataFrame, spec: SlotSpec, used: set,
+                  counts: Optional[Dict[str, int]] = None) -> Optional[str]:
+    """Pick the series for a slot: exact plane+fluid (or fat-suppression) match first, then any same-plane
+    series. Among candidates: CSV order, or the most slices when `counts` (series uid -> files) is given."""
     same_plane = series[series["Anatomical_Plane"] == spec.plane]
-    exact = same_plane[same_plane["Fluid_Sensitive"] == spec.fluid]
+    if spec.fat is not None:
+        exact = same_plane[same_plane["Fat_Suppression"] == spec.fat]
+    elif spec.fluid >= 0:
+        exact = same_plane[same_plane["Fluid_Sensitive"] == spec.fluid]
+    else:
+        exact = same_plane
     for cand in (exact, same_plane):
         cand = cand[~cand["SeriesInstanceUID"].isin(used)] if len(cand) > 1 else cand
         if len(cand):
+            if counts:
+                n = cand["SeriesInstanceUID"].astype(str).map(lambda u: counts.get(u, 0))
+                cand = cand.iloc[np.argsort(-n.to_numpy(), kind="stable")]
             return str(cand["SeriesInstanceUID"].iloc[0])
     return None
+
+
+def series_file_counts(study_dir: str, uids) -> Dict[str, int]:
+    """Number of .dcm files per series directory (cheap proxy for slice count)."""
+    out = {}
+    for u in uids:
+        try:
+            out[str(u)] = sum(f.endswith(".dcm") for f in os.listdir(os.path.join(study_dir, str(u))))
+        except OSError:
+            out[str(u)] = 0
+    return out
 
 
 def build_study_stack(
@@ -285,6 +308,7 @@ def build_study_stack(
     selective: bool = False,
     pct_stride: int = 0,
     threads: int = 8,
+    series_pick: str = "first",
 ) -> Dict[str, np.ndarray]:
     """
     Build the cached representation of one study.
@@ -295,6 +319,7 @@ def build_study_stack(
         canonical: mirror left knees to right and order slices anatomically
         selective: decode only the sampled slices (test-time speed-up); False = decode every slice
         pct_stride: selective only — also decode every k-th slice for the percentile window (0 = none)
+        series_pick: "first" (CSV order) or "most_slices" among the candidate series of a slot
 
     Returns:
         dict with
@@ -310,8 +335,9 @@ def build_study_stack(
 
     chosen: List[Optional[str]] = []
     used: set = set()
+    counts = series_file_counts(study_dir, series["SeriesInstanceUID"]) if series_pick == "most_slices" else None
     for spec in slots:
-        uid = choose_series(series, spec, used)
+        uid = choose_series(series, spec, used, counts)
         chosen.append(uid)
         if uid is not None:
             used.add(uid)
@@ -393,3 +419,101 @@ def _build_selective(study_dir, slots, chosen, res, crop_mm, span, pcts, canonic
             valid[pos: pos + spec.n] = 1
         pos += spec.n
     return {"image": image, "slot": slot_ids, "valid": valid, "side": np.int8(side)}
+
+
+# ------------------------------------------------------------------------------------------ series layout
+# Reader-style cache (goodpjw2008/rsna-knee-2-5d-convnext-reader, Apache-2.0): every series of a study is kept
+# with its native slices (<= max_slices), reoriented to a fixed patient frame, resampled to a fixed mm/px.
+PLANE_NAMES = ("Sagittal", "Coronal", "Axial")
+# patient axis (LPS) -> (slice-order sign, (image-column axis, sign), (image-row axis, sign))
+# Sagittal: slices right -> left, columns anterior -> posterior, rows superior -> inferior
+# Coronal:  slices anterior -> posterior, columns patient right -> left, rows superior -> inferior
+# Axial:    slices superior -> inferior, columns patient right -> left, rows anterior -> posterior
+CANON_FRAME = {0: (+1, (1, +1), (2, -1)), 1: (+1, (0, +1), (2, -1)), 2: (-1, (0, +1), (1, +1))}
+
+
+def canonical_inplane(vol: np.ndarray, spacing, row_cos, col_cos, axis: int):
+    """Transpose / flip a (N, H, W) series into the fixed in-plane frame of its plane. Returns (vol, spacing)."""
+    _, (cax, csgn), (rax, rsgn) = CANON_FRAME[axis]
+    r, c = np.asarray(row_cos, float), np.asarray(col_cos, float)
+    spacing = tuple(spacing)
+    if abs(r[cax]) < abs(r[rax]):  # image rows and columns are swapped relative to the canonical frame
+        vol, r, c, spacing = vol.transpose(0, 2, 1), c, r, spacing[::-1]
+    if r[cax] * csgn < 0:
+        vol = vol[:, :, ::-1]
+    if c[rax] * rsgn < 0:
+        vol = vol[:, ::-1, :]
+    return np.ascontiguousarray(vol), spacing
+
+
+def resample_frame(img: np.ndarray, spacing, mm_per_px: float, size: int) -> np.ndarray:
+    """Centre crop to size*mm_per_px mm, resample to mm_per_px, zero-pad to (size, size)."""
+    out = np.zeros((size, size), np.float32)
+    h, w = img.shape
+    ch = min(h, int(round(size * mm_per_px / spacing[0])))
+    cw = min(w, int(round(size * mm_per_px / spacing[1])))
+    y0, x0 = (h - ch) // 2, (w - cw) // 2
+    crop = np.ascontiguousarray(img[y0:y0 + ch, x0:x0 + cw])
+    nh = max(1, min(size, int(round(ch * spacing[0] / mm_per_px))))
+    nw = max(1, min(size, int(round(cw * spacing[1] / mm_per_px))))
+    res = cv2.resize(crop, (nw, nh), interpolation=cv2.INTER_AREA if nh < ch else cv2.INTER_LINEAR)
+    oy, ox = (size - nh) // 2, (size - nw) // 2
+    out[oy:oy + nh, ox:ox + nw] = res
+    return out
+
+
+def build_series_stack(study_dir: str, series: pd.DataFrame, mm_per_px: float = 0.55, size: int = 280,
+                       max_slices: int = 64, pcts: Sequence[float] = (1, 99.5), max_cands: int = 2,
+                       min_slices: int = 3) -> Dict[str, np.ndarray]:
+    """
+    Reader-style cached representation of one study: all series, native slices.
+
+    Slot = plane + 3 * (1 - Fat_Suppression) (fat-suppressed planes first); per slot the candidate series are
+    sorted by slice count and the largest `max_cands` kept (cand 0 = largest).
+
+    Returns dict with image uint8 (D, size, size), slot int8 (D,), cand int8 (D,), pos float16 (D,) = index /
+    (n - 1) inside its series, valid uint8 (D,), side int8 () (knee side, informational).
+    """
+    vols, geos = [], []
+    for row in series.itertuples(index=False):
+        uid = str(row.SeriesInstanceUID)
+        try:
+            vol, spacing, geo = load_series(os.path.join(study_dir, uid))
+        except Exception:
+            continue
+        rc, cc = geo.get("row_cos"), geo.get("col_cos")
+        axis = int(np.abs(np.cross(rc, cc)).argmax()) if rc is not None and cc is not None else \
+            PLANE_NAMES.index(row.Anatomical_Plane) if row.Anatomical_Plane in PLANE_NAMES else 0
+        cen = geo.get("centres")
+        if cen is not None and len(cen) == len(vol) and len(vol) > 1:
+            vol = vol[np.argsort(CANON_FRAME[axis][0] * cen[:, axis], kind="stable")]
+        if len(vol) > max_slices:
+            vol = vol[np.linspace(0, len(vol) - 1, max_slices).round().astype(int)]
+        if rc is not None and cc is not None:
+            vol, spacing = canonical_inplane(vol, spacing, rc, cc, axis)
+        res = np.stack([resample_frame(x, spacing, mm_per_px, size) for x in vol])
+        lo, hi = np.percentile(res[:, ::4, ::4], pcts)
+        u8 = (np.clip((res - lo) / max(hi - lo, 1e-6), 0, 1) * 255).round().astype(np.uint8)
+        plane = row.Anatomical_Plane if row.Anatomical_Plane in PLANE_NAMES else PLANE_NAMES[axis]
+        slot = PLANE_NAMES.index(plane) + 3 * (1 - int(row.Fat_Suppression))
+        if len(u8) >= min_slices:
+            vols.append((slot, len(u8), u8))
+            geos.append(geo)
+    by_slot: Dict[int, list] = {}
+    for slot, n, u8 in vols:
+        by_slot.setdefault(slot, []).append((n, u8))
+    image, slot_ids, cand_ids, pos = [], [], [], []
+    for slot in sorted(by_slot):
+        for ci, (n, u8) in enumerate(sorted(by_slot[slot], key=lambda t: -t[0])[:max_cands]):
+            image.append(u8)
+            slot_ids.append(np.full(n, slot, np.int8))
+            cand_ids.append(np.full(n, ci, np.int8))
+            pos.append((np.arange(n) / max(n - 1, 1)).astype(np.float16))
+    side = np.int8(knee_side(geos)) if geos else np.int8(0)
+    if not image:
+        return {"image": np.zeros((1, size, size), np.uint8), "slot": np.zeros(1, np.int8),
+                "cand": np.zeros(1, np.int8), "pos": np.zeros(1, np.float16), "valid": np.zeros(1, np.uint8),
+                "side": side}
+    image = np.concatenate(image)
+    return {"image": image, "slot": np.concatenate(slot_ids), "cand": np.concatenate(cand_ids),
+            "pos": np.concatenate(pos), "valid": np.ones(len(image), np.uint8), "side": side}

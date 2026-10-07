@@ -33,7 +33,10 @@ def get_config(overrides: Optional[List[str]] = None, config_name: str = "defaul
     exp = [o for o in overrides if o.startswith("exp=")]
     if exp:
         name = exp[-1].split("=", 1)[1]
-        cfg = OmegaConf.merge(cfg, OmegaConf.load(os.path.join(CONFIG_PATH, "exp", f"{name}.yaml")))
+        exp_cfg = OmegaConf.load(os.path.join(CONFIG_PATH, "exp", f"{name}.yaml"))
+        cfg = OmegaConf.merge(cfg, exp_cfg)
+        if OmegaConf.select(exp_cfg, "preprocess.slots") is not None:  # a slot layout replaces, never unions
+            cfg.preprocess.slots = exp_cfg.preprocess.slots
     rest = [o for o in overrides if "=" in o and not o.startswith("exp=")]
     if rest:
         cfg = OmegaConf.merge(cfg, OmegaConf.from_dotlist(rest))

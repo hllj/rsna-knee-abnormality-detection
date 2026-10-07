@@ -31,12 +31,13 @@ from torch.utils.data import DataLoader
 
 from src.constants import ID_COL, LABELS
 from src.dataset.datasets import KneeStudyDataset, eval_windows
-from src.dataset.dicom import build_study_stack, slot_specs_from_cfg
+from src.dataset.dicom import build_series_stack, build_study_stack, slot_specs_from_cfg
 from src.kaggle_paths import find_competition_root
 from src.models.model import build_model
 
 # preprocessing fields that change the stack; others (num_workers, limit, compress) do not
-PP_KEYS = ("slots", "res", "crop_mm", "span", "clip_percentiles", "canonical")
+PP_KEYS = ("slots", "res", "crop_mm", "span", "clip_percentiles", "canonical", "layout", "series_pick",
+           "mm_per_px", "max_slices", "max_cands")
 
 
 def pp_key(pp: dict) -> str:
@@ -44,11 +45,27 @@ def pp_key(pp: dict) -> str:
 
 
 def _stack(uid, study_dir, series, pp, opts) -> Dict[str, np.ndarray]:
+    if pp.get("layout", "study") == "series":  # reader-style: every series, native slices (full decode)
+        return build_series_stack(study_dir, series, mm_per_px=pp["mm_per_px"], size=pp["res"],
+                                  max_slices=pp.get("max_slices", 64), pcts=pp["clip_percentiles"],
+                                  max_cands=pp.get("max_cands", 2))
     return build_study_stack(
         study_dir, series, slot_specs_from_cfg(pp["slots"]), res=pp["res"], crop_mm=pp["crop_mm"],
         span=pp["span"], pcts=pp["clip_percentiles"], canonical=pp.get("canonical", True),
         selective=opts.get("selective", False), pct_stride=opts.get("pct_stride", 0), threads=opts.get("threads", 8),
+        series_pick=pp.get("series_pick", "first"),
     )
+
+
+def empty_stack(pp) -> Dict[str, np.ndarray]:
+    """All-masked stack (a study that could not be read predicts the model's prior)."""
+    if pp.get("layout", "study") == "series":
+        return {"image": np.zeros((1, pp["res"], pp["res"]), np.uint8), "slot": np.zeros(1, np.int8),
+                "cand": np.zeros(1, np.int8), "pos": np.zeros(1, np.float16), "valid": np.zeros(1, np.uint8),
+                "side": np.int8(0)}
+    n = sum(int(v["n"]) for v in pp["slots"].values())
+    return {"image": np.zeros((n, pp["res"], pp["res"]), np.uint8), "slot": np.zeros(n, np.int8),
+            "valid": np.zeros(n, np.uint8), "side": np.int8(0)}
 
 
 # ------------------------------------------------------------------------------------------------ cache mode
@@ -105,9 +122,7 @@ def _stack_job(args):
     try:
         d = _stack(uid, study_dir, series, pp, opts)
     except Exception:  # never lose a study: an empty (masked) stack predicts the model's prior
-        n = sum(int(v["n"]) for v in pp["slots"].values())
-        d = {"image": np.zeros((n, pp["res"], pp["res"]), np.uint8), "slot": np.zeros(n, np.int8),
-             "valid": np.zeros(n, np.uint8), "side": np.int8(0)}
+        d = empty_stack(pp)
     return uid, d, time.time() - t
 
 

@@ -37,6 +37,12 @@ EXPERIMENTS = {
                     "cache_name": "cache_256_dense"},
     "cache-dense-pack": {"id": "EXP-023", "what": "EXP-023 dense cache re-packed into ~1 GB tar shards for vast.ai",
                          "cache_name": "cache_256_dense"},
+    **{f"cache-raptor-p{i}": {"id": "EXP-043", "what": f"Raptor-repro cache part {i + 1}/3: 80 slices (22/18/15/10/15) over "
+                              "2-98%, 140 mm @336 px, 2-98 pct, no canonicalisation", "cfg": "raptor_repro",
+                              "cache_name": "cache_336_raptor", "part": i, "parts": 3} for i in range(3)},
+    **{f"cache-reader-p{i}": {"id": "EXP-044", "what": f"reader-repro cache part {i + 1}/4: every series, native slices "
+                              "<= 64, LPS in-plane frame, 0.55 mm/px @280, 1-99.5 pct", "cfg": "reader_repro",
+                              "cache_name": "cache_280_reader", "part": i, "parts": 4} for i in range(4)},
     "train-teacher": {"id": "EXP-002", "what": "teacher: EfficientNet-B0 @224, FOLD 0 ONLY x 15 epochs, blended report "
                       "labels (check one fold before spending GPU on all five; folds 1-4 = EXP-005)",
                       "exp": "effnet_224", "epochs": 15, "folds": [0], "extra": []},
@@ -216,6 +222,57 @@ EXP.update(studies=len(files), size_gib=round(size, 2), side_R=sides.count(1), s
            slices_per_study=int(np.load(files[0])["image"].shape[0]))
 print(EXP)
 json.dump(EXP, open("/kaggle/working/experiment.json", "w"), indent=1)'''),
+    ]
+
+
+def nb_cache_part(key: str, cfg: str, name: str, part: int, parts: int, steps: str):
+    """One shard (studies[part::parts]) of a cache too big for one notebook's 20 GB output, written straight
+    as ~1 GiB tar shards + cache_manifest.json (the format scripts/vast/fetch_cache.py downloads)."""
+    return [
+        ("md", header(key, f"RSNA Knee — {name} cache, part {part + 1}/{parts} (CPU)",
+                      f"Builds studies `[{part}::{parts}]` of `{name}` with `configs/exp/{cfg}.yaml` and packs them "
+                      "into tar shards for vast.ai (`CACHE_PACKS=... bash scripts/vast/get_data.sh`).\n\n" + steps)),
+        ("code", exp_json(key) + f"\nCFG, NAME, PART, PARTS = {cfg!r}, {name!r}, {part}, {parts}\n" + FIND),
+        ("code", '''subprocess.run([sys.executable, "-m", "pip", "install", "-q", "iterative-stratification",
+                "pylibjpeg", "pylibjpeg-libjpeg", "pylibjpeg-openjpeg"], check=True)
+DATA = "/kaggle/tmp/data"; os.makedirs(DATA, exist_ok=True)
+if not os.path.exists(f"{DATA}/raw"):
+    os.symlink(COMP, f"{DATA}/raw")
+OUT = f"/kaggle/tmp/{NAME}"
+ENV = dict(os.environ, DATA_DIR=DATA, PYTHONPATH=CODE)
+t = time.time()
+subprocess.run([sys.executable, f"{CODE}/scripts/preprocess.py", f"exp={CFG}", "preprocess.compress=true",
+                f"preprocess.part={PART}", f"preprocess.parts={PARTS}",
+                f"preprocess.num_workers={os.cpu_count()}", f"paths.cache_dir={OUT}"], env=ENV, check=True)
+print(f"preprocess {(time.time() - t) / 60:.1f} min")'''),
+        ("md", "## Sanity checks, then pack"),
+        ("code", '''import hashlib, tarfile
+import numpy as np
+files = sorted(f for f in os.listdir(OUT) if f.endswith(".npz"))
+slices, cover = [], []
+for f in files[::25]:
+    z = np.load(os.path.join(OUT, f)); slices.append(z["image"].shape[0]); cover.append(float(z["valid"].mean()))
+total = sum(os.path.getsize(os.path.join(OUT, f)) for f in files)
+n_shards = max(1, round(total / 2**30))
+manifest = {"name": NAME, "studies": len(files), "bytes": total, "shards": []}
+for k in range(n_shards):
+    shard = f"{NAME}_p{PART}_{k:02d}.tar"
+    with tarfile.open(f"/kaggle/working/{shard}", "w") as tar:
+        for f in files[k::n_shards]:
+            tar.add(os.path.join(OUT, f), arcname=f"{NAME}/{f}")
+    for f in files[k::n_shards]:
+        os.remove(os.path.join(OUT, f))
+    h = hashlib.sha256()
+    with open(f"/kaggle/working/{shard}", "rb") as fh:
+        for block in iter(lambda: fh.read(1 << 24), b""):
+            h.update(block)
+    manifest["shards"].append({"file": shard, "sha256": h.hexdigest(), "bytes": os.path.getsize(f"/kaggle/working/{shard}")})
+json.dump(manifest, open("/kaggle/working/cache_manifest.json", "w"), indent=1)
+EXP.update(studies=len(files), size_gib=round(total / 2**30, 2), shards=n_shards, part=PART, parts=PARTS,
+           slices_per_study_mean=round(float(np.mean(slices)), 1), slices_per_study_max=int(np.max(slices)),
+           slot_coverage=round(float(np.mean(cover)), 4))
+json.dump(EXP, open("/kaggle/working/experiment.json", "w"), indent=1)
+print(EXP)'''),
     ]
 
 
@@ -533,6 +590,16 @@ if __name__ == "__main__":
     write("cache-dense", nb_cache("cache-dense", e["cfg"], e["cache_name"]), metadata("cache-dense", False, True))
     write("cache-dense-pack", nb_pack("cache-dense-pack", e["cache_name"], "rsna-knee-cache-dense"),
           metadata("cache-dense-pack", False, False, (), ["cache-dense"]))
+    steps = {"raptor": "1. **Series per slot** — sag fluid 22, 2nd sag 18, cor fluid 15, 2nd cor 10, axial 15 slices.\n"
+                       "2. **Slices** sorted by position, sampled evenly over 2–98% of each series; no left/right mirroring.\n"
+                       "3. **Crop** 140 mm → 336 px (0.417 mm/px); per-series 2–98 percentile → uint8.",
+             "reader": "1. **Every series** (largest 2 per plane × fat-suppression slot), native slices (≤ 64).\n"
+                       "2. **Reorient** to a fixed patient frame (transpose / flips from ImageOrientationPatient).\n"
+                       "3. **Resample** to 0.55 mm/px in a 154 mm frame (280 px); 1–99.5 percentile → uint8."}
+    for key, e in EXPERIMENTS.items():
+        if key.startswith(("cache-raptor-p", "cache-reader-p")):
+            write(key, nb_cache_part(key, e["cfg"], e["cache_name"], e["part"], e["parts"], steps[key.split("-")[1]]),
+                  metadata(key, False, True))
     write("bench", nb_bench(), metadata("bench", True, False, (f"{USER}/rsna-knee-weights",), ()))
     write("iter02-a", nb_jobs("iter02-a"), metadata("iter02-a", True, True, LABEL_DATASETS, ["cache"]))
     write("iter02-b", nb_jobs("iter02-b"),

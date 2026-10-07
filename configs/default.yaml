@@ -77,6 +77,13 @@ preprocess:
   num_workers: 8
   compress: false                  # savez_compressed (~2x smaller, for Kaggle's 20 GB output cap)
   limit: 0                         # >0: cache only the 58 gold + `limit` random studies (dry runs)
+  part: 0                          # build only studies[part::parts] (big caches split over Kaggle notebooks)
+  parts: 1
+  layout: study                    # study = fixed slots per study | series = every series, native slices (reader)
+  series_pick: first               # study layout: first (CSV order) | most_slices among a slot's candidates
+  mm_per_px: null                  # series layout: physical pixel size; frame = res * mm_per_px mm
+  max_slices: 64                   # series layout: linspace down to this many slices per series
+  max_cands: 2                     # series layout: keep the largest N series per slot
 
 # Model
 model:

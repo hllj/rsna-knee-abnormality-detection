@@ -32,6 +32,9 @@ def main():
         gold = set(gold_ids(train))
         rest = pd.Series([u for u in ids if u not in gold]).sample(frac=1.0, random_state=cfg.seed).tolist()
         ids = [u for u in ids if u in gold] + rest[:limit]
+    parts, part = int(cfg.preprocess.get("parts", 1) or 1), int(cfg.preprocess.get("part", 0) or 0)
+    if parts > 1:  # one shard of a cache too big for a single Kaggle notebook output
+        ids = ids[part::parts]
     done = set()
     if os.path.isdir(cfg.paths.cache_dir):
         done = {f[:-4] for f in os.listdir(cfg.paths.cache_dir) if f.endswith(".npz")}

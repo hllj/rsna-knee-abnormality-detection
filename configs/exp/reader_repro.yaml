@@ -1,0 +1,59 @@
+# ITER-06 / EXP-042 — reproduction of goodpjw2008's 2.5D ConvNeXt-T reader (Apache-2.0; dataset
+# goodpjw2008/rsna-knee-2-5d-convnext-reader: preprocess.py, knee.py, train.py, make_labels.py) inside our pipeline.
+# Cache: every series, native slices (<= 64), fixed LPS in-plane frame, 1-99.5 percentile. Their store is 0.4 mm/px
+# at 384 px and the model crops 0.92 of it and resizes to 256 (0.552 mm/px). We store the same pixels the model
+# sees: 0.55 mm/px at 280 px (154 mm), crop 0.92 -> 256. See experiments/reports/ITER-06_plan.md.
+exp_name: reader_repro
+paths:
+  cache_dir: ${paths.processed_data}/cache_280_reader
+preprocess:
+  layout: series
+  res: 280
+  mm_per_px: 0.55
+  max_slices: 64
+  max_cands: 2
+  clip_percentiles: [1, 99.5]
+  canonical: false
+  slots:                           # slot index = plane + 3 * (1 - Fat_Suppression)
+    sag_fs: {plane: Sagittal, fat: 1}
+    cor_fs: {plane: Coronal, fat: 1}
+    ax_fs: {plane: Axial, fat: 1}
+    sag: {plane: Sagittal, fat: 0}
+    cor: {plane: Coronal, fat: 0}
+    ax: {plane: Axial, fat: 0}
+model:
+  backbone: convnext_tiny.fb_in22k_ft_in1k
+  img_size: 256
+  head: transformer_mil            # proj(dim 384)+slot emb+slice-position emb -> 2-layer transformer -> attention/finding
+  slot_embedding: true
+  drop_rate: 0.2
+  drop_path_rate: 0.1
+  channels_last: true
+windows:
+  k_train: 8                       # per series slot
+  k_eval: 12                       # per series slot
+  sampling: stratified             # one random centre in each of k equal bins over 4-96% of the series
+  span: [0.04, 0.96]
+  random_series: true              # training: random candidate series of a slot; eval: the largest
+  fov: 0.92                        # centre crop of the cached frame before resizing to img_size
+augmentation:
+  preset: reader_gpu               # rot +-12 deg, scale +-12%, shift +-6%, gamma exp(+-0.25), gain +-10%, per series
+  window_dropout: 0.0
+training:
+  batch_size: 8
+  accumulate_grad_batches: 1
+  num_epochs: 14
+  lr: 5.0e-4                       # head
+  backbone_lr_mult: 0.2            # backbone 1e-4
+  weight_decay: 0.02
+  schedule: cosine
+  warmup_epochs: 1
+  loss: bce
+  gradient_clip_val: 3.0
+  precision: bf16-mixed
+  ema: 0.998
+  ema_eval: true                   # validate / save the EMA weights
+  top_k_average: 0
+  val_every: 1
+labels:
+  reader_mean4: true               # mean of 4 public tables (steven v4, pilkwang v2, lixin gpt56sol, laymond qwen)
