@@ -29,6 +29,8 @@ def load_source(path: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
     df = pd.read_parquet(path) if path.endswith(".parquet") else pd.read_csv(path)
     df[ID_COL] = df[ID_COL].astype(str)
     df = df.drop_duplicates(ID_COL).set_index(ID_COL)
+    if not set(LABELS) <= set(df.columns) and all(f"{c}__label" in df.columns for c in LABELS):
+        df = df.rename(columns={f"{c}__label": c for c in LABELS})  # e.g. laymond's qwen3-8b weak labels
     vals = df[LABELS].astype(float)
     silent = np.isclose(vals.values, SILENT)
     verdicts = [f"{c}__verdict" for c in LABELS]
@@ -92,6 +94,8 @@ def build_targets(cfg) -> pd.DataFrame:
     y = blend_sources(paths, silence, list(lc.weights) if lc.get("weights") else None)
     if lc.pseudo.enabled and lc.pseudo.oof_files:
         y = apply_pseudo(y, list(lc.pseudo.oof_files), lc.pseudo.weight, dict(lc.pseudo.per_label_weight or {}))
+    if lc.get("clip"):
+        y = y.clip(*[float(v) for v in lc.clip])
     if lc.get("hard"):
         y = (y >= 0.5).astype(float)
     return y.fillna(0.0)

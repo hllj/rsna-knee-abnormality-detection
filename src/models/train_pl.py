@@ -49,7 +49,7 @@ class KneeModule(L.LightningModule):
         self.val_names: List[str] = []  # one tag per val dataloader: "report" / "gold"
 
     def forward(self, batch):
-        return self.model(batch["x"], batch.get("slot"), batch.get("mask"))
+        return self.model(batch["x"], batch.get("slot"), batch.get("mask"), batch.get("pos"))
 
     def loss(self, logits, y):
         if self.cfg.training.loss == "focal":
@@ -90,6 +90,11 @@ class KneeModule(L.LightningModule):
             weight_decay=t.weight_decay,
         )
         total = self.trainer.estimated_stepping_batches
+        if t.get("schedule", "cosine") == "onecycle":  # Raptor: OneCycle, cosine anneal, pct_start warm-up
+            sched = torch.optim.lr_scheduler.OneCycleLR(
+                opt, max_lr=[t.lr * t.backbone_lr_mult, t.lr], total_steps=int(total),
+                pct_start=float(t.get("pct_start", 0.15)))
+            return {"optimizer": opt, "lr_scheduler": {"scheduler": sched, "interval": "step"}}
         warm = int(total * t.warmup_epochs / max(1, t.num_epochs))
 
         def lr_lambda(step):
@@ -100,6 +105,50 @@ class KneeModule(L.LightningModule):
 
         sched = torch.optim.lr_scheduler.LambdaLR(opt, lr_lambda)
         return {"optimizer": opt, "lr_scheduler": {"scheduler": sched, "interval": "step"}}
+
+
+class EMA(Callback):
+    """Exponential moving average of the weights (goodpjw: decay 0.998 with warm-up (1+s)/(10+s)).
+    With `eval_ema`, validation, top-k averaging and the export all use the EMA weights."""
+
+    def __init__(self, decay: float, eval_ema: bool = True):
+        self.decay, self.eval_ema = decay, eval_ema
+        self.ema: Dict[str, torch.Tensor] = {}
+        self.step, self._backup = 0, None
+
+    def on_fit_start(self, trainer, pl_module):
+        self.ema = {k: v.detach().clone() for k, v in pl_module.model.state_dict().items()}
+
+    @torch.no_grad()
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
+        if (batch_idx + 1) % trainer.accumulate_grad_batches:
+            return
+        self.step += 1
+        d = min(self.decay, (1 + self.step) / (10 + self.step))
+        for k, v in pl_module.model.state_dict().items():
+            if v.is_floating_point():
+                self.ema[k].lerp_(v.detach(), 1 - d)
+            else:
+                self.ema[k].copy_(v)
+
+    def _swap_in(self, pl_module):
+        self._backup = {k: v.detach().clone() for k, v in pl_module.model.state_dict().items()}
+        pl_module.model.load_state_dict(self.ema)
+
+    def on_validation_start(self, trainer, pl_module):
+        if self.eval_ema and self.ema and not trainer.sanity_checking:
+            self._swap_in(pl_module)
+
+    def on_validation_end(self, trainer, pl_module):
+        # runs after TopKAverage.on_validation_end (callback order), so top-k keeps EMA weights
+        if self._backup is not None:
+            pl_module.model.load_state_dict(self._backup)
+            self._backup = None
+
+    def on_fit_end(self, trainer, pl_module):
+        if self.eval_ema and self.ema and not any(isinstance(c, TopKAverage) and c.kept for c in trainer.callbacks):
+            pl_module.model.load_state_dict(self.ema)
+            print("[ema] exported EMA weights")
 
 
 class TopKAverage(Callback):
@@ -146,7 +195,7 @@ def predict(model: nn.Module, loader: DataLoader, device) -> pd.DataFrame:
     uids, preds = [], []
     for b in loader:
         with torch.autocast(device_type=device.type, enabled=device.type == "cuda"):
-            logits = model(b["x"].to(device), b["slot"].to(device), b["mask"].to(device))
+            logits = model(b["x"].to(device), b["slot"].to(device), b["mask"].to(device), b["pos"].to(device))
         preds.append(torch.sigmoid(logits.float()).cpu().numpy())
         uids += list(b["uid"])
     return pd.DataFrame(np.concatenate(preds), columns=LABELS).assign(**{ID_COL: uids})[[ID_COL] + LABELS]
@@ -165,8 +214,15 @@ def main():
     targets = build_targets(cfg)
     # report-only targets (no pseudo-labels): the common ruler for OOF AUC across rounds
     report_targets = build_targets(OmegaConf.merge(cfg, {"labels": {"pseudo": {"enabled": False}}}))
+    # the shared ruler (models/oof/report_targets.csv) is only written by the default label set; every run also
+    # keeps its own copy, so a run with other labels (e.g. reader_repro) never moves the ruler
     report_targets.rename_axis(ID_COL).reset_index().to_csv(
-        os.path.join(cfg.paths.oof_dir, "report_targets.csv"), index=False)
+        os.path.join(cfg.paths.oof_dir, f"{cfg.exp_name}_report_targets.csv"), index=False)
+    default_labels = list(get_config([]).labels.sources) == list(cfg.labels.sources) and not cfg.labels.get("clip")
+    ruler = os.path.join(cfg.paths.oof_dir, "report_targets.csv")
+    if default_labels or not os.path.exists(ruler):
+        report_targets.rename_axis(ID_COL).reset_index().to_csv(
+            os.path.join(cfg.paths.oof_dir, "report_targets.csv"), index=False)
     if not os.path.exists(cfg.data.folds_file):
         # folds must not depend on pseudo-labels, or OOF predictions leak between rounds
         os.makedirs(os.path.dirname(cfg.data.folds_file) or ".", exist_ok=True)
@@ -186,8 +242,14 @@ def main():
     log.info(f"train {len(tr_ids)} | val {len(va_ids)} | gold {len(gd_ids)}")
 
     module = KneeModule(cfg)
+    if cfg.training.loss == "bce_posweight":  # Raptor: pos_weight = clip((1-p)/p, 1, 10), p = train prevalence
+        prev = np.clip(np.stack([y[u] for u in tr_ids]).mean(0), 0.03, 0.7)
+        module.pos_weight = torch.tensor(np.clip((1 - prev) / prev, 1, 10), dtype=torch.float32)
+        log.info("pos_weight " + " ".join(f"{c}={v:.2f}" for c, v in zip(LABELS, module.pos_weight.tolist())))
     dc = module.model.data_config
-    common = dict(cache_dir=cfg.paths.cache_dir, targets=y, img_size=cfg.model.img_size, mean=dc["mean"], std=dc["std"])
+    wcfg = OmegaConf.to_container(cfg.windows, resolve=True)
+    common = dict(cache_dir=cfg.paths.cache_dir, targets=y, img_size=cfg.model.img_size, mean=dc["mean"],
+                  std=dc["std"], windows=wcfg)
     train_ds = KneeStudyDataset(
         tr_ids, k=cfg.windows.k_train, train=True,
         aug_cfg=OmegaConf.to_container(cfg.augmentation) if cfg.augmentation.enabled else None,
@@ -210,11 +272,14 @@ def main():
             config=OmegaConf.to_container(cfg, resolve=True),
         ))
     topk = TopKAverage(monitor, cfg.training.top_k_average)
+    callbacks = [topk, LearningRateMonitor("step")]
+    if float(cfg.training.get("ema", 0) or 0) > 0:  # after topk: restores the live weights after each validation
+        callbacks.append(EMA(float(cfg.training.ema), bool(cfg.training.get("ema_eval", True))))
     trainer = L.Trainer(
         max_epochs=cfg.training.num_epochs, precision=cfg.training.precision,
         accumulate_grad_batches=cfg.training.accumulate_grad_batches,
         gradient_clip_val=cfg.training.gradient_clip_val, devices=cfg.resources.devices,
-        logger=loggers, callbacks=[topk, LearningRateMonitor("step")],
+        logger=loggers, callbacks=callbacks,
         enable_checkpointing=False, log_every_n_steps=20,
         max_time=cfg.training.get("max_time"),  # e.g. "00:08:30:00": stop cleanly, still average/export/predict
         check_val_every_n_epoch=int(cfg.training.get("val_every", 1)),

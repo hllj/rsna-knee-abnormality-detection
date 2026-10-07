@@ -55,5 +55,11 @@ training:
   ema_eval: true                   # validate / save the EMA weights
   top_k_average: 0
   val_every: 1
-labels:
-  reader_mean4: true               # mean of 4 public tables (steven v4, pilkwang v2, lixin gpt56sol, laymond qwen)
+labels:                            # mean of 4 public tables, no silence filling, clipped (goodpjw make_labels v0)
+  sources:
+    - llm_labels_v4_blend.csv      # stevenleehans/rsna-knee-llm-report-labels
+    - report_labels_v2.csv         # pilkwang/rsna-knee-llm-labels
+    - labels_llm_gpt56sol.csv      # lixin73/rsna-knee-llm-report-labels-sol56
+    - qwen_knee_weak_labels.csv    # laymond/rsna-knee-abnormality-qwen3-8b-weak-labels (<finding>__label)
+  silence: null
+  clip: [0.01, 0.99]

@@ -85,7 +85,7 @@ def main():
 
     name = man.get("name", "cache_256")
     n = len([f for f in os.listdir(os.path.join(dest, name)) if f.endswith(".npz")])
-    assert n == man["studies"], (n, man["studies"])
+    assert n >= man["studies"], (n, man["studies"])  # >=: several part notebooks fill the same cache dir
     print(f"cache ok: {n} studies in {os.path.join(dest, name)}")
 
 

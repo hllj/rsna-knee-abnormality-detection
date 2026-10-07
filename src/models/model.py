@@ -21,8 +21,9 @@ from src.constants import NUM_LABELS
 class AttentionMILHead(nn.Module):
     """Gated attention pooling with separate attention weights and classifier per finding."""
 
-    def __init__(self, dim: int, n_out: int = NUM_LABELS, hidden: int = 256, drop: float = 0.2):
+    def __init__(self, dim: int, n_out: int = NUM_LABELS, hidden: int = 256, drop: float = 0.2, gated: bool = True):
         super().__init__()
+        self.gated = gated  # False = Raptor's plain tanh attention
         self.norm = nn.LayerNorm(dim)
         self.att_v = nn.Linear(dim, hidden)
         self.att_u = nn.Linear(dim, hidden)
@@ -34,11 +35,48 @@ class AttentionMILHead(nn.Module):
 
     def forward(self, h: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         h = self.norm(h)
-        a = self.att_w(self.drop(torch.tanh(self.att_v(h)) * torch.sigmoid(self.att_u(h))))  # B,K,N
+        g = torch.tanh(self.att_v(h))
+        if self.gated:
+            g = g * torch.sigmoid(self.att_u(h))
+        a = self.att_w(self.drop(g))  # B,K,N
         if mask is not None:
+            mask = mask | ~mask.any(1, keepdim=True)  # an all-masked study attends to everything (no NaN)
             a = a.masked_fill(~mask[..., None], float("-inf"))
         a = torch.softmax(a.float(), dim=1).to(h.dtype)
         pooled = torch.einsum("bkn,bkf->bnf", a, h)
+        return (pooled * self.cls_w).sum(-1) + self.cls_b
+
+
+class TransformerMILHead(nn.Module):
+    """goodpjw's reader head: project to `dim`, add slot + slice-position embeddings, a small transformer over all
+    windows of the study, then one attention pooling per finding."""
+
+    def __init__(self, dim_in: int, num_slots: int, n_out: int = NUM_LABELS, dim: int = 384, depth: int = 2,
+                 drop: float = 0.2):
+        super().__init__()
+        self.proj = nn.Sequential(nn.Dropout(drop), nn.Linear(dim_in, dim), nn.LayerNorm(dim))
+        self.slot_emb = nn.Embedding(num_slots, dim)
+        self.pos_emb = nn.Sequential(nn.Linear(1, dim), nn.GELU(), nn.Linear(dim, dim))
+        layer = nn.TransformerEncoderLayer(dim, 8, dim * 2, dropout=0.1, batch_first=True, norm_first=True)
+        self.tf = nn.TransformerEncoder(layer, depth, enable_nested_tensor=False) if depth else None
+        self.att = nn.Sequential(nn.Linear(dim, 256), nn.Tanh(), nn.Dropout(drop), nn.Linear(256, n_out))
+        self.cls_w = nn.Parameter(torch.randn(n_out, dim) * 0.02)
+        self.cls_b = nn.Parameter(torch.zeros(n_out))
+
+    def forward(self, h: torch.Tensor, mask: Optional[torch.Tensor] = None, slot: Optional[torch.Tensor] = None,
+                pos: Optional[torch.Tensor] = None) -> torch.Tensor:
+        b, k, _ = h.shape
+        if slot is None:
+            slot = torch.zeros(b, k, dtype=torch.long, device=h.device)
+        if pos is None:
+            pos = torch.zeros(b, k, device=h.device)
+        h = self.proj(h) + self.slot_emb(slot) + self.pos_emb(pos.unsqueeze(-1).to(h.dtype))
+        pad = ~mask if mask is not None else torch.zeros(b, k, dtype=torch.bool, device=h.device)
+        pad = pad & ~pad.all(1, keepdim=True)  # a study with no series at all attends to everything
+        if self.tf is not None:
+            h = self.tf(h, src_key_padding_mask=pad)
+        a = self.att(h).float().masked_fill(pad.unsqueeze(-1), -1e4).softmax(1)  # B,K,N
+        pooled = torch.einsum("bkn,bkd->bnd", a.to(h.dtype), h)
         return (pooled * self.cls_w).sum(-1) + self.cls_b
 
 
@@ -87,12 +125,17 @@ class KneeMILModel(nn.Module):
         if channels_last:
             self.backbone.to(memory_format=torch.channels_last)
         dim = self.backbone.num_features
-        self.slot_emb = nn.Embedding(num_slots, dim) if slot_embedding else None
+        self.head_type = head
+        # transformer_mil carries its own slot / position embeddings at the head width
+        self.slot_emb = nn.Embedding(num_slots, dim) if slot_embedding and head != "transformer_mil" else None
         if self.slot_emb is not None:
             nn.init.zeros_(self.slot_emb.weight)
-        self.head = (
-            AttentionMILHead(dim, drop=drop_rate) if head == "attn_mil" else PoolHead(dim, mode=head, drop=drop_rate)
-        )
+        if head in ("attn_mil", "tanh_mil"):
+            self.head = AttentionMILHead(dim, drop=drop_rate, gated=head == "attn_mil")
+        elif head == "transformer_mil":
+            self.head = TransformerMILHead(dim, num_slots, drop=drop_rate)
+        else:
+            self.head = PoolHead(dim, mode=head, drop=drop_rate)
 
     @property
     def data_config(self) -> dict:
@@ -100,12 +143,14 @@ class KneeMILModel(nn.Module):
         return timm.data.resolve_data_config({}, model=self.backbone)
 
     def forward(self, x: torch.Tensor, slot: Optional[torch.Tensor] = None,
-                mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+                mask: Optional[torch.Tensor] = None, pos: Optional[torch.Tensor] = None) -> torch.Tensor:
         b, k = x.shape[:2]
         x = x.flatten(0, 1)
         if self.channels_last:
             x = x.contiguous(memory_format=torch.channels_last)
         h = self.backbone(x).view(b, k, -1)
+        if self.head_type == "transformer_mil":
+            return self.head(h, mask, slot, pos)
         if self.slot_emb is not None and slot is not None:
             h = h + self.slot_emb(slot)
         return self.head(h, mask)

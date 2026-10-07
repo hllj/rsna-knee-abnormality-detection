@@ -57,6 +57,7 @@ labels:
       PF OA: 0.6
       Lateral OA: 0.6
   hard: false                      # round to 0/1 (soft targets are better)
+  clip: null                       # e.g. [0.01, 0.99] (goodpjw's reader)
 
 # DICOM -> cached uint8 stack. Each study becomes one (D, res, res) stack built from slots.
 preprocess:
@@ -100,10 +101,16 @@ model:
 # 2.5D windows (3 adjacent slices -> RGB) sampled per study
 windows:
   k_train: 16
-  k_eval: 48
+  k_eval: 48                       # 0 = every window position (study layout)
+  sampling: uniform                # uniform | stratified (one random centre per equal bin)
+  cross_slot: false                # Raptor: windows over the concatenated stack, centred-on-empty masked
+  span: [0.04, 0.96]               # series layout: window centres over this part of each series
+  random_series: false             # series layout: random candidate series per slot in training
+  fov: null                        # series layout: centred crop fraction of the cached frame before resizing
 
 augmentation:
   enabled: true
+  preset: ours                     # ours (below) | gain_only (Raptor: +-10% gain) | reader_gpu (series layout)
   # NO horizontal flips — laterality/compartment (medial vs lateral) is signal.
   brightness_contrast: 0.2
   gamma: [0.8, 1.2]
@@ -122,7 +129,10 @@ training:
   precision: 16-mixed
   accumulate_grad_batches: 1
   gradient_clip_val: 1.0
-  ema: 0.0                         # e.g. 0.999; 0 disables
+  ema: 0.0                         # e.g. 0.998; 0 disables
+  ema_eval: true                   # validate / export the EMA weights
+  schedule: cosine                 # cosine (warmup_epochs) | onecycle (pct_start)
+  pct_start: 0.15
   top_k_average: 3                 # average weights of best-k epochs at the end
   monitor: val_auc_report          # macro AUC vs report labels on the held-out fold
   max_time: null                   # wall-clock cap "DD:HH:MM:SS" (Kaggle 12 h sessions); stops cleanly

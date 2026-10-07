@@ -22,15 +22,23 @@ done
 echo "== label sets"
 kaggle datasets download stevenleehans/rsna-knee-llm-report-labels -p "$DATA/labels" --unzip -q
 kaggle datasets download pilkwang/rsna-knee-llm-labels -p "$DATA/labels" --unzip -q
+# reader_repro's 4-table mean (goodpjw): + lixin gpt56sol and laymond qwen3-8b
+kaggle datasets download lixin73/rsna-knee-llm-report-labels-sol56 -p "$DATA/labels" --unzip -q
+kaggle datasets download laymond/rsna-knee-abnormality-qwen3-8b-weak-labels -p "$DATA/labels" --unzip -q
 rm -f "$DATA/labels"/*.py
 
-CACHE_PACK=${CACHE_PACK:-rsna-knee-cache-pack}
+# CACHE_PACKS = space-separated part notebooks filling one cache dir (ITER-06), e.g.
+#   CACHE_PACKS="rsna-knee-cache-raptor-p0 rsna-knee-cache-raptor-p1 rsna-knee-cache-raptor-p2" CACHE_NAME=cache_336_raptor
 CACHE_NAME=${CACHE_NAME:-cache_256}
-echo "== cache shards from $USER_NAME/$CACHE_PACK -> $DATA/processed/$CACHE_NAME"
+CACHE_PACKS=${CACHE_PACKS:-${CACHE_PACK:-rsna-knee-cache-pack}}
 if [ "$(ls "$DATA/processed/$CACHE_NAME" 2>/dev/null | wc -l)" -lt 4407 ]; then
-  # one shard per request, checksum-verified, resumable (re-run the script if interrupted)
-  "$PY" scripts/vast/fetch_cache.py --data "$DATA" --user "$USER_NAME" --pack "$CACHE_PACK"
-  rm -rf "$DATA/_pack_$CACHE_PACK"
+  for P in $CACHE_PACKS; do
+    echo "== cache shards from $USER_NAME/$P -> $DATA/processed/$CACHE_NAME"
+    # one shard per request, checksum-verified, resumable (re-run the script if interrupted)
+    "$PY" scripts/vast/fetch_cache.py --data "$DATA" --user "$USER_NAME" --pack "$P"
+    rm -rf "$DATA/_pack_$P"
+  done
 fi
+echo "cache studies: $(ls "$DATA/processed/$CACHE_NAME" | wc -l)"
 "$PY" scripts/eval_labels.py "paths.data_dir=$DATA"
 echo "next: bash scripts/vast/train.sh effnet_224 0"

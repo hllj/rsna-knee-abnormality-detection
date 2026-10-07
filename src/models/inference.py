@@ -30,7 +30,7 @@ from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 
 from src.constants import ID_COL, LABELS
-from src.dataset.datasets import KneeStudyDataset, eval_windows
+from src.dataset.datasets import KneeStudyDataset, eval_windows, to_model_input
 from src.dataset.dicom import build_series_stack, build_study_stack, slot_specs_from_cfg
 from src.kaggle_paths import find_competition_root
 from src.models.model import build_model
@@ -103,14 +103,15 @@ def predict_ckpt(ckpt_path: str, study_ids: List[str], cache_dir: str, device, b
     if device.type == "cuda":
         model.half()
     dc = model.data_config
-    ds = KneeStudyDataset(study_ids, cache_dir, k=k_eval or cfg.windows.k_eval, img_size=cfg.model.img_size,
-                          mean=dc["mean"], std=dc["std"])
+    ds = KneeStudyDataset(study_ids, cache_dir, k=cfg.windows.k_eval if k_eval is None else k_eval,
+                          img_size=cfg.model.img_size, mean=dc["mean"], std=dc["std"],
+                          windows=OmegaConf.to_container(cfg.windows, resolve=True))
     dl = DataLoader(ds, batch_size=batch_size, num_workers=workers, pin_memory=True)
     out = []
     for b in dl:
         x = b["x"].to(device, non_blocking=True)
         x = x.half() if device.type == "cuda" else x
-        logits = model(x, b["slot"].to(device), b["mask"].to(device))
+        logits = model(x, b["slot"].to(device), b["mask"].to(device), b["pos"].to(device))
         out.append(torch.sigmoid(logits.float()).cpu().numpy())
     return np.concatenate(out)
 
@@ -160,21 +161,23 @@ class Member:
         self.k, self.img = int(self.cfg.windows.k_eval), int(self.cfg.model.img_size)
         self.mean, self.std = tuple(dc["mean"]), tuple(dc["std"])
         self.pp = OmegaConf.to_container(self.cfg.preprocess, resolve=True)
+        self.w = OmegaConf.to_container(self.cfg.windows, resolve=True)
+        self.series = self.pp.get("layout", "study") == "series"
 
     @property
     def contract(self):
-        return self.k, self.img, self.mean, self.std
+        return self.k, self.img, self.mean, self.std, json.dumps(self.w, sort_keys=True), self.series
 
 
 OOM_SPLITS = 0
 
 
-def forward_safe(model, x, slot, mask) -> torch.Tensor:
+def forward_safe(model, x, slot, mask, pos=None) -> torch.Tensor:
     """model(x, slot, mask) for a batch of studies; on CUDA OOM, retry on halves (heavy backbones such as
     CoAtNet @384 do not fit 8 studies x k windows in one forward pass on a 16 GB T4)."""
     global OOM_SPLITS
     try:
-        return model(x, slot, mask)
+        return model(x, slot, mask, pos)
     except torch.cuda.OutOfMemoryError:
         if x.shape[0] == 1:
             raise
@@ -182,30 +185,37 @@ def forward_safe(model, x, slot, mask) -> torch.Tensor:
     OOM_SPLITS += 1
     torch.cuda.empty_cache()
     h = x.shape[0] // 2
-    return torch.cat([forward_safe(model, x[:h], slot[:h], mask[:h]),
-                      forward_safe(model, x[h:], slot[h:], mask[h:])])
+    ph = (pos[:h], pos[h:]) if pos is not None else (None, None)
+    return torch.cat([forward_safe(model, x[:h], slot[:h], mask[:h], ph[0]),
+                      forward_safe(model, x[h:], slot[h:], mask[h:], ph[1])])
 
 
 @torch.no_grad()
 def predict_batch(groups: Dict[tuple, List[Member]], stacks: List[dict], device) -> Dict[str, np.ndarray]:
     """Run every member on one batch of studies; windows are built once per input contract."""
     out = {}
-    for (k, img, mean, std), members in groups.items():
-        wins, slots = zip(*(eval_windows(d, k) for d in stacks))
-        x = torch.from_numpy(np.stack(wins)).to(device, non_blocking=True)  # B,K,3,H,W uint8
-        b = x.shape[0]
-        x = x.flatten(0, 1).float().div_(255.0)
-        if x.shape[-1] != img:
-            x = F.interpolate(x, size=(img, img), mode="bilinear", align_corners=False)
+    for (k, img, mean, std, wkey, series), members in groups.items():
+        w = json.loads(wkey)
+        wins, slots, masks, poss = zip(*(eval_windows(d, k, w) for d in stacks))
+        b = len(wins)
+        if series:  # same CPU crop/resize as training (reader_views); windows are already float
+            x = torch.stack([to_model_input(wn, img, False, dict(w, _group=k)) for wn in wins]).to(device)
+            x = x.flatten(0, 1)
+        else:
+            x = torch.from_numpy(np.stack(wins)).to(device, non_blocking=True)  # B,K,3,H,W uint8
+            x = x.flatten(0, 1).float().div_(255.0)
+            if x.shape[-1] != img:
+                x = F.interpolate(x, size=(img, img), mode="bilinear", align_corners=False)
         m = torch.tensor(mean, device=device).view(1, 3, 1, 1)
         s = torch.tensor(std, device=device).view(1, 3, 1, 1)
-        x = ((x - m) / s).view(b, k, 3, img, img)
+        x = ((x - m) / s).view(b, -1, 3, img, img)
         if device.type == "cuda":
             x = x.half()
         slot = torch.from_numpy(np.stack(slots)).to(device)
-        mask = torch.ones(b, k, dtype=torch.bool, device=device)
+        mask = torch.from_numpy(np.stack(masks)).to(device)
+        pos = torch.from_numpy(np.stack(poss)).to(device)
         for mem in members:
-            out[mem.path] = torch.sigmoid(forward_safe(mem.model, x, slot, mask).float()).cpu().numpy()
+            out[mem.path] = torch.sigmoid(forward_safe(mem.model, x, slot, mask, pos).float()).cpu().numpy()
     return out
 
 
