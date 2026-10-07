@@ -142,3 +142,72 @@ Costs are on one RTX 3090: about 75 min per fold for ConvNeXt-S @288 dense, roug
 - **Submissions:** keep one per day spare. Final picks:
   - (a) the best ConvNeXt 5-fold (or ConvNeXt + CoAtNet blend);
   - (b) the most diverse blend of our own families.
+
+---
+
+## 5. Single-model survey: public notebooks and forum claims (2026-10-07)
+
+**Question:** is there a public notebook with a single model at ≥ 0.94, and how does it work?
+
+**Answer: no.** 17 notebooks, selected from 657 by score rank and title, were read in full.
+- Every public notebook at 0.941–0.946 runs the same community bundle of about 45 checkpoints:
+  - DINOv2 ×20 and A5 ×5
+  - RadImageNet heads
+  - Raptor ×4 views and about 14 CoAtNets
+- Titles mislead. "Pure CoAtNet 0946" is that bundle; its author's correction says it scores 0.943, and 0.946
+  needed a private ConvNeXt mixed in at 10%.
+
+### Best documented single-family public models
+| Model | LB | Recipe | Code |
+|---|---|---|---|
+| **Raptor** (dreaddevelopment) — one CoAtNet-RMLP-2 run, **no folds**, trained on all 4,349 non-gold studies, epoch chosen on gold-58 | 0.924 (64 slices, 42 windows) → 0.927 (62 windows) → **0.932** ("fine spacing": 80 slices over 2–98%, 140 mm crop, 336 px, 78 windows) → **0.935** (v5 "maxspan", per sankurero's log) | `coatnet_rmlp_2_rw_384.sw_in12k_ft_in1k` @384 from a 336 store; 3-slice windows; tanh-attention MIL per finding; soft BCE with pos_weight clip((1−p)/p, 1, 10); AdamW backbone 3e-5 / head 1e-3, wd 0.02, OneCycle (15% warm-up), 16 epochs, batch 8, k_train 12; **no augmentation except ±10% gain**; bf16, gradient clip 3; top-3 epoch weight average | trainer public (`dreaddevelopment/knee-mri-training-the-twelve-finding-model`); labels private |
+| **goodpjw2008 ConvNeXt-T reader** | 1 fold 0.922; **3 folds 0.929**; 5 folds 0.930 | 0.4 mm/px, 384 → 256 px, ≤64 slices, 6 slots, 12 windows per series over 4–96%; ConvNeXt-T, then a 2-layer transformer over slice tokens (slot + position embeddings), then per-finding attention; mean of 4 public label tables, plain BCE, 14 epochs, folds grouped by report text; aug: rotation ±12°, scale ±12%, shift, gamma, gain, LR flip on coronal/axial | `train.py` and `make_labels.py` inside dataset `goodpjw2008/rsna-knee-2-5d-convnext-reader` |
+| Ours, EXP-027 | **0.930** (5 folds) | see README | — |
+
+Raptor's own model panel on gold (45 studies):
+
+| Model | Gold AUC |
+|---|---|
+| CoAtNet @384 | 0.903 |
+| CNN @336 | 0.883 |
+| Swin-B @384 | 0.883 |
+| ConvNeXt-B @384 | 0.875 |
+| ConvNeXt-L @384 | 0.875 |
+| EffNetV2-L @480 | 0.872 |
+| MaxViT @384 | 0.844 |
+
+Blending them gained only about +0.001 over CoAtNet alone on the LB.
+
+### Forum-only claims of single models ≥ 0.94 (no code)
+| Who | Claim | Hints given |
+|---|---|---|
+| Tanuki_boosting | 0.955 | single model, 5 folds; nothing else |
+| CoolinLai | 0.954 | ResNet-50 @224, 5 folds |
+| Musa Tur Farazi | 0.952 | 224 px single model |
+| Tucker Arrants | low 0.95s | ResNet / EffNet @224–288, simple pooling, own Qwen labels, augmentation ablations one at a time, CV on report labels (0.003 threshold) |
+| Archit Konde | 0.950 | CoAtNet @224 single fold; out-of-fold predictions mixed into labels (≥ 50/50 toward the model) |
+| NguyenThanhNhan | 0.950 | Qwen3.5-2B VLM, LoRA + vision encoder @384, single fold, 3.5 h |
+| Scott Willis | 0.949 | "smaller ResNet", single fold, own Gemma-4 labels (~0.89 vs gold), 5-min inference |
+| Raymond Yuen | 0.949 | CoAtNet @288, full train; teachers on several weak-label sources, then pseudo-labels, then a student |
+| SpeedSci | 0.940–0.942 | DINOv2 / EffNet-B4 / ResNet-50, 5 folds each; changing label version moved DINOv2 0.931 → 0.942 |
+| Ali Ozan Memetoglu | 0.942 | single vision model on Claude-extracted labels |
+
+**Common thread in the claims:** own LLM labels plus a simple, well-tuned CNN. Several credit pseudo-label rounds
+from teachers trained on *different* label sources. That is not the same as one model distilling into itself,
+which failed for us (EXP-010) and for goodpjw. None of these claims can be checked.
+
+### What this adds to the queue
+1. **Raptor-style full-data model (EXP-037).** Train on all non-gold studies for a fixed number of epochs
+   (the fold-0 best epoch) with top-3 averaging.
+   - Each 5-fold member sees 80% of the data; Raptor credits more data with +0.013 on gold.
+   - Cost: 1 run (~90 min ConvNeXt / ~4 h CoAtNet). Check it on the LB only, since there is no held-out set.
+   - Blend it with the 5-fold set.
+2. **CoAtNet @384 dense (EXP-028, running)** already mostly follows Raptor's recipe: backbone 3e-5, head 1e-3,
+   wd 0.02, k_train 12. Remaining differences:
+   - We store at 256 px vs their 336.
+   - We use affine + brightness/contrast augmentation vs their gain only.
+   - We use plain soft BCE vs their pos_weight BCE.
+   - Epoch 9: held-out 0.868 / gold 0.908, on track against the ConvNeXt dense bar (0.8745 / 0.9037).
+3. **Teacher-ensemble pseudo-labels (EXP-038), not self-distillation.** Use the out-of-fold rank-average of
+   *different* families (ConvNeXt dense + CoAtNet) as the teacher, mixed 50/50 into the soft labels; train a fresh
+   student. This is Raymond Yuen's and Archit Konde's route. Score it only against unmixed `report_targets.csv`.
