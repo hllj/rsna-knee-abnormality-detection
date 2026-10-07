@@ -63,3 +63,19 @@ bash scripts/vast/train.sh coatnet_384 0 \
 ~14–16 GB (try batch 6 if the first epoch shows < 16 GB), ~3.5–4 h per fold on a 3090. Benchmark its inference
 (`scripts/bench_inference.py`) before a 5-fold submission. For the dense cache add
 `preprocess.slots.sag_fs.n=26 …` or use a dense CoAtNet config.
+
+## 5. Results so far
+### EXP-024 — ConvNeXt-S @288 on the dense cache, fold 0 (2026-10-08, vast 3090 Washington)
+| Fold 0 | OOF vs report labels | Gold-58 | Lat. Meniscus OOF / gold | Synovitis gold | Train time |
+|---|---|---|---|---|---|
+| EXP-020 (72 slices, bs 4×2) | 0.8719 | 0.8958 | 0.860 / 0.808 | 0.741 | 87 min |
+| **EXP-024 (dense 88 slices, bs 8×1, channels_last)** | **0.8745** (+0.0026) | **0.9037** (+0.008) | **0.866 / 0.842** | 0.744 | **73 min** |
+
+* **Gate: pass** (OOF ≥ bar − 0.003 and gold up). The OOF gain alone is at the noise floor, but gold, Lateral
+  Meniscus (+0.034 gold) and ACL / Medial OA / Fracture all move the right way — consistent with the
+  Kaggle evidence that slice density matters most for thin structures.
+* Efficiency: batch 8 × accumulate 1 + channels_last filled 21.8 / 24.6 GB at 100 % GPU and cut the epoch time to
+  ~5.25 min (from 6.4–6.9) despite 22 % more slices per study.
+* Backup: Kaggle Model `hlly34/rsna-knee-convnext-s-288-dense` → `exp-024-fold0`; local `runs/EXP-024/`.
+* Next: submit fold 0 (expect ≥ EXP-019's 0.923), train folds 1–4 (~4 × 73 min ≈ 5 h ≈ $1.5–2), submit the 5-fold
+  ensemble; then CoAtNet @384 on the dense cache.
