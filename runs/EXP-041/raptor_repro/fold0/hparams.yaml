@@ -1,0 +1,156 @@
+competition: rsna-knee-abnormality-detection
+exp_name: raptor_repro
+fold: 0
+seed: 42
+paths:
+  data_dir: data
+  raw_data: data/raw
+  processed_data: data/processed
+  cache_dir: data/processed/cache_336_raptor
+  labels_dir: data/labels
+  model_dir: models
+  log_dir: logs
+  oof_dir: models/oof
+data:
+  train_file: data/raw/train.csv
+  train_series_file: data/raw/train_series.csv
+  test_file: data/raw/test.csv
+  test_series_file: data/raw/test_series.csv
+  sample_submission_file: data/raw/sample_submission.csv
+  train_dicom_dir: data/raw/train_series
+  test_dicom_dir: data/raw/test_series
+  folds_file: /root/rsna-knee/configs/folds_5.csv
+  num_folds: 5
+labels:
+  sources:
+  - llm_labels_v4_blend.csv
+  - llm_labels_full.csv
+  - report_labels_v2.csv
+  weights: null
+  silence:
+    default: 0.1
+    Synovitis: from_effusion
+    PF OA: 0.25
+    Fracture: 0.2
+    Baker's: 0.03
+    Medial OA: 0.03
+  pseudo:
+    enabled: false
+    oof_files: []
+    weight: 0.5
+    per_label_weight:
+      Synovitis: 0.7
+      PF OA: 0.6
+      Lateral OA: 0.6
+  hard: false
+  clip: null
+preprocess:
+  res: 336
+  crop_mm: 140
+  canonical: false
+  span:
+  - 0.02
+  - 0.98
+  clip_percentiles:
+  - 2
+  - 98
+  slots:
+    sag_fluid:
+      plane: Sagittal
+      fluid: 1
+      'n': 22
+    sag_2nd:
+      plane: Sagittal
+      fluid: 0
+      'n': 18
+    cor_fluid:
+      plane: Coronal
+      fluid: 1
+      'n': 15
+    cor_2nd:
+      plane: Coronal
+      fluid: -1
+      'n': 10
+    axial:
+      plane: Axial
+      fluid: -1
+      'n': 15
+  num_workers: 8
+  compress: false
+  limit: 0
+  part: 0
+  parts: 1
+  layout: study
+  series_pick: first
+  mm_per_px: null
+  max_slices: 64
+  max_cands: 2
+model:
+  backbone: coatnet_rmlp_2_rw_384.sw_in12k_ft_in1k
+  pretrained: true
+  img_size: 384
+  drop_rate: 0.2
+  drop_path_rate: 0.0
+  head: tanh_mil
+  slot_embedding: false
+  grad_checkpointing: true
+  channels_last: true
+windows:
+  k_train: 12
+  k_eval: 0
+  k_val: 24
+  sampling: uniform
+  cross_slot: true
+  span:
+  - 0.04
+  - 0.96
+  random_series: false
+  fov: null
+augmentation:
+  enabled: true
+  preset: gain_only
+  brightness_contrast: 0.2
+  gamma:
+  - 0.8
+  - 1.2
+  shift_scale_rotate:
+    shift: 0.06
+    scale: 0.1
+    rotate: 10
+  window_dropout: 0.0
+training:
+  batch_size: 8
+  num_epochs: 16
+  lr: 0.001
+  backbone_lr_mult: 0.03
+  weight_decay: 0.02
+  warmup_epochs: 1
+  loss: bce_posweight
+  pos_weight: null
+  precision: bf16-mixed
+  accumulate_grad_batches: 1
+  gradient_clip_val: 3.0
+  ema: 0.0
+  ema_eval: true
+  schedule: onecycle
+  pct_start: 0.15
+  top_k_average: 3
+  monitor: val_auc_report
+  max_time: null
+  val_every: 1
+evaluation:
+  gold_eval: true
+logging:
+  wandb:
+    enabled: false
+    project: rsna-knee
+    entity: null
+    tags: []
+inference:
+  batch_size: 1
+  tta: false
+  checkpoints: []
+  rank_average: false
+resources:
+  num_workers: 16
+  devices: 1
