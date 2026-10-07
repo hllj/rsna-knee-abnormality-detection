@@ -64,3 +64,29 @@ and an attribution header. Raptor is CC0.
 - **vast credit:** $3.60. A1 + A2 take about 7 GPU-hours ≈ $1.5, so Phase B needs a top-up.
 - **Kaggle:** cache notebooks are CPU-only (free). Submissions: 3 for Phase A; the rest of the week for Phase B.
 - **Deadlines:** team merge 2026-10-15; final 2026-10-22.
+
+## Revised design (2026-10-07): one codebase, pipelines as config options
+Agreed direction: don't vendor the two pipelines as separate silos. Implement their pieces as options in our
+cache, dataset, model and trainer, so each reproduction is one YAML file and a merge is a mix of options.
+Defaults stay at the current behaviour, so EXP-027 is reproducible.
+
+| Layer | New options |
+|---|---|
+| Cache (`dicom.py`, `scripts/preprocess.py`) | `span`, `slots`, `crop_mm`, `res`, `clip_percentiles`; `orient: laterality / full / none`; `series_pick: first / most_slices`, `keep_alt_series`; `cap_native` (no duplicated slices; unused slots masked); store `pos` (relative position in the series) and `cand` (candidate series id) per slice |
+| Dataset (`datasets.py`) | `window_sampling: uniform / stratified / all`; `random_series` in training; `cross_slot_windows` |
+| Model (`model.py`) | `head: gated_mil / tanh_mil / transformer_mil` (pos + slot embeddings, depth 2, dim 384); `slot_embedding` on/off |
+| Training (`train_pl.py`) | `loss: bce / bce_posweight`; `ema` + eval on EMA weights; `schedule: cosine / onecycle`; `aug_preset: ours / gain_only / reader_gpu`; bf16 option |
+| Inference | unchanged: every checkpoint's `cfg.preprocess` contract drives stream preprocessing (`pp_key` groups) |
+
+**Reproduction configs**
+- `raptor_repro.yaml`: 80 slices; 2–98%; 22/18/15/10/15; 140 mm @336; 2–98 percentile; `orient none`;
+  CoAtNet @384; `tanh_mil`; no slot embedding; `bce_posweight`; OneCycle; `gain_only`; k 12, eval all; 16 epochs;
+  batch 8 if the memory probe allows, else 4×2.
+- `reader_repro.yaml`: native slices ≤ 64; `orient full`; 0.55 mm/px at 280 → 256; 1–99.5 percentile;
+  `most_slices` + `random_series`; stratified k 8 per slot; eval 12 per slot; ConvNeXt-T; `transformer_mil`;
+  EMA 0.998; cosine 1e-4 / 5e-4; `reader_gpu` augmentation; 14 epochs; 4-table mean labels.
+
+**Checks:**
+- Unit tests for every new option.
+- A side-by-side preprocessing diff of 5 studies against goodpjw's `preprocess.py` and Raptor's notebook code.
+- A 30-step memory probe on the box before each long run.
