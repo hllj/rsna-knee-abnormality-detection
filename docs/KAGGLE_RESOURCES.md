@@ -108,3 +108,26 @@ Code is uploaded as the private dataset `hlly34/rsna-knee-code`.
 | Test inference (3 public test studies) | 31 s in the dry-run kernel; 79 s offline incl. wheel install |
 
 Not the model's ceiling: 11% of the data and 8 epochs. Next run: full cache, 5 folds, 15–20 epochs.
+
+## 7. Update 2026-10-07 (see experiments/reports/ITER-05_plan.md for the full drill)
+
+* The public 0.943–0.946 notebooks (`pjmathematician/rsna-knee-d4-blend`,
+  `goodpjw2008/rsna-knee-stack-2-5d-convnext-mil-lb-0-944`, Raptor student blend, tri-specialist superstack) are
+  inference-only blends of about 40 checkpoints that other participants trained, running 6.5–8 h. Independently
+  trained families score 0.924–0.930. goodpjw's own ConvNeXt-T reader: 5 folds 0.930.
+* Training-only notebook worth reading: `romantamrazov/rsna-knee-dinosaur-v5-train`. It uses the median of label
+  sources with T = 0.85 sharpening, per-cell confidence weights, and 0.86 soft BCE + 0.14 pairwise ranking loss.
+* New threads:
+  * 745861 Tricks: VLM labelling of images + reports; spend expensive annotators only on uncertain cells.
+  * 745949 Synovitis/Effusion: experts call fluid positive more often than reports do.
+  * 745214 Labels: Tucker Arrants (~0.95 with Qwen labels) doubts that label work matters.
+  * 744056 Prize eligibility of others' weights: no host answer yet.
+  * 745759: sorting slices by filename is random; sort by ImagePositionPatient (+0.028). We already do this.
+* Past RSNA winners (index: kaggle.farid.one, data in `competition-markup.json`):
+  * Sequence heads over ordered slice embeddings.
+  * CutMix.
+  * OOF-disagreement noise removal (Lumbar 2nd, +1%).
+  * Flip with left/right target swap.
+  * Auxiliary heads.
+  * EMA.
+* Public LB on 2026-10-07: 5,388 teams. Top 10% ≈ 0.944, rank 100 = 0.952, rank 10 = 0.961.
