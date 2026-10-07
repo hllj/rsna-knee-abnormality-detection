@@ -73,6 +73,7 @@ class KneeMILModel(nn.Module):
         drop_path_rate: float = 0.1,
         grad_checkpointing: bool = False,
         img_size: Optional[int] = None,
+        channels_last: bool = False,
     ):
         super().__init__()
         kw = dict(pretrained=pretrained, num_classes=0, drop_path_rate=drop_path_rate)
@@ -81,6 +82,10 @@ class KneeMILModel(nn.Module):
         self.backbone = timm.create_model(backbone, **kw)
         if grad_checkpointing:
             self.backbone.set_grad_checkpointing(True)
+        # NHWC layout: faster convolutions with AMP on tensor-core GPUs (Ampere+); numerically equivalent
+        self.channels_last = channels_last
+        if channels_last:
+            self.backbone.to(memory_format=torch.channels_last)
         dim = self.backbone.num_features
         self.slot_emb = nn.Embedding(num_slots, dim) if slot_embedding else None
         if self.slot_emb is not None:
@@ -97,7 +102,10 @@ class KneeMILModel(nn.Module):
     def forward(self, x: torch.Tensor, slot: Optional[torch.Tensor] = None,
                 mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         b, k = x.shape[:2]
-        h = self.backbone(x.flatten(0, 1)).view(b, k, -1)
+        x = x.flatten(0, 1)
+        if self.channels_last:
+            x = x.contiguous(memory_format=torch.channels_last)
+        h = self.backbone(x).view(b, k, -1)
         if self.slot_emb is not None and slot is not None:
             h = h + self.slot_emb(slot)
         return self.head(h, mask)
@@ -115,4 +123,5 @@ def build_model(cfg, pretrained: Optional[bool] = None) -> KneeMILModel:
         drop_path_rate=m.drop_path_rate,
         grad_checkpointing=m.grad_checkpointing,
         img_size=m.img_size,
+        channels_last=bool(m.get("channels_last", False)),
     )

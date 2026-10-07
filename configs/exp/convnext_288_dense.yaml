@@ -21,11 +21,12 @@ model:
   backbone: convnext_small.fb_in22k_ft_in1k
   img_size: 288
   drop_path_rate: 0.2
+  channels_last: true              # ConvNeXt + AMP on a 3090: faster convs, same results
 windows:
   k_train: 16
   k_eval: 48
 training:
-  batch_size: 8                    # RTX 3090 (24 GB): ~21-22 GB; on a 16 GB T4 use 4 + accumulate_grad_batches 2
+  batch_size: 8                    # RTX 3090 (24 GB): fills ~21-22 GB; same effective batch as EXP-020 (4 x 2)
   accumulate_grad_batches: 1
   num_epochs: 15
   lr: 5.0e-4
