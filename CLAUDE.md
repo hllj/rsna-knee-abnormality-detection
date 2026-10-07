@@ -35,6 +35,10 @@ Final submission deadline 2026-10-22 (team merge / entry 2026-10-15). 5 submissi
 * Current best: **EXP-020**, ConvNeXt-S @288, 5 folds rank-averaged, public LB **0.926**; fold-0 bar for the
   next gate: OOF 0.872, gold 0.896 (`runs/EXP-020/`). Weights: Kaggle dataset `hlly34/rsna-knee-weights`;
   backups: Kaggle Models `hlly34/rsna-knee-convnext-s-288` and `hlly34/rsna-knee-effnet-b0-224` (EXP-009, LB 0.914).
+* In progress: **ITER-04** (experiments/reports/ITER-04_plan.md) — dense 88-slice cache (`cache_256_dense`,
+  Kaggle `rsna-knee-cache-dense` → `-pack`), then `convnext_288_dense` fold 0, then CoAtNet @384 on a 24 GB GPU.
+  On a 3090 use batch 8 × accumulate 1 for ConvNeXt (11.6 GB at 4 × 2). Dense cache on vast:
+  `CACHE_PACK=rsna-knee-cache-dense-pack CACHE_NAME=cache_256_dense bash scripts/vast/get_data.sh`.
 * submit.sh verifies the notebook used exactly the uploaded checkpoints (unique upload marker) — never bypass it;
   EXP-017 was scored on stale weights before this check existed.
 * Registry: `experiments/registry.csv` (source) → `experiments/EXPERIMENTS.md` (generated). Reports: `experiments/reports/`.

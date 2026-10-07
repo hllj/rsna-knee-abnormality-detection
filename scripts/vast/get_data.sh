@@ -4,6 +4,7 @@
 # No DICOMs are downloaded.
 #
 #   bash scripts/vast/get_data.sh            # -> data/raw, data/labels, data/processed/cache_256
+#   CACHE_PACK=rsna-knee-cache-dense-pack CACHE_NAME=cache_256_dense bash scripts/vast/get_data.sh   # dense cache
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 PY=${PYTHON:-python}
@@ -23,11 +24,13 @@ kaggle datasets download stevenleehans/rsna-knee-llm-report-labels -p "$DATA/lab
 kaggle datasets download pilkwang/rsna-knee-llm-labels -p "$DATA/labels" --unzip -q
 rm -f "$DATA/labels"/*.py
 
-echo "== cache shards from $USER_NAME/rsna-knee-cache-pack"
-if [ "$(ls "$DATA/processed/cache_256" 2>/dev/null | wc -l)" -lt 4407 ]; then
+CACHE_PACK=${CACHE_PACK:-rsna-knee-cache-pack}
+CACHE_NAME=${CACHE_NAME:-cache_256}
+echo "== cache shards from $USER_NAME/$CACHE_PACK -> $DATA/processed/$CACHE_NAME"
+if [ "$(ls "$DATA/processed/$CACHE_NAME" 2>/dev/null | wc -l)" -lt 4407 ]; then
   # one shard per request, checksum-verified, resumable (re-run the script if interrupted)
-  "$PY" scripts/vast/fetch_cache.py --data "$DATA" --user "$USER_NAME"
-  rm -rf "$DATA/_pack"
+  "$PY" scripts/vast/fetch_cache.py --data "$DATA" --user "$USER_NAME" --pack "$CACHE_PACK"
+  rm -rf "$DATA/_pack_$CACHE_PACK"
 fi
 "$PY" scripts/eval_labels.py "paths.data_dir=$DATA"
 echo "next: bash scripts/vast/train.sh effnet_224 0"

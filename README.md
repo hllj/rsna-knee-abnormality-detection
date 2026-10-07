@@ -31,7 +31,8 @@ Iteration reports: [ITER-01 baseline](experiments/reports/ITER-01_2026-09-28.md)
 [ITER-01b inference speed-up](experiments/reports/ITER-01b_inference_speedup.md) ·
 [ITER-02 plan (resolution / backbone)](experiments/reports/ITER-02_plan.md) ·
 [ITER-02 fold-0 results: ConvNeXt-S @288 wins](experiments/reports/ITER-02_2026-09-29.md) ·
-[ITER-03 ConvNeXt 5 folds: LB 0.926](experiments/reports/ITER-03_2026-10-06.md).
+[ITER-03 ConvNeXt 5 folds: LB 0.926](experiments/reports/ITER-03_2026-10-06.md) ·
+**[ITER-04 plan: denser-slice cache + CoAtNet @384](experiments/reports/ITER-04_plan.md)** (in progress).
 
 ---
 
@@ -58,6 +59,9 @@ A change that fails the step-1 gate is recorded as NEGATIVE and goes straight to
 | dataset `hlly34/rsna-knee-code` | this repo's `src/ configs/ scripts/ submission/` | refresh with `scripts/upload_code.sh` |
 | notebook `rsna-knee-cache` | all 4,407 training studies preprocessed (EXP-001) | done |
 | notebook `rsna-knee-cache-pack` | same cache as 14 tar shards, 14.5 GiB (for downloading) | done |
+| notebook `rsna-knee-cache-dense` (+ `-pack`) | **dense** cache: 88 slices/study, `cache_256_dense` (EXP-023) | ITER-04 |
+| dataset `hlly34/rsna-knee-wheels` | offline pylibjpeg wheels for the inference notebook | done |
+| Kaggle Models `rsna-knee-convnext-s-288`, `rsna-knee-effnet-b0-224` | backed-up fold checkpoints (EXP-020, EXP-009) | done |
 | notebook `rsna-knee-dryrun-train` | subset run, EXP-000 → **public LB 0.791** | done |
 | notebook `rsna-knee-train-teacher` | EfficientNet-B0 teacher (EXP-002) | see registry |
 | notebook `rsna-knee-inference` | offline ensemble → `submission.csv` | used for every submission |

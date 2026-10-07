@@ -31,6 +31,12 @@ EXPERIMENTS = {
     "cache": {"id": "EXP-001", "what": "full training cache: 4,407 studies, 256 px, 72 slices, 140 mm, canonical knee"},
     "cache-pack": {"id": "EXP-001", "what": "EXP-001 cache re-packed into ~1 GB tar shards so it can be downloaded "
                    "off Kaggle (vast.ai) in a few requests instead of 4,407"},
+    # ITER-04: denser-slice cache (88 slices/study; more sagittal/coronal slices for menisci)
+    "cache-dense": {"id": "EXP-023", "what": "dense training cache: 4,407 studies, 256 px, 88 slices (sag-FS 26, sag 14, "
+                    "cor-FS 20, cor 10, ax-FS 14, ax 4), 140 mm, canonical knee", "cfg": "convnext_288_dense",
+                    "cache_name": "cache_256_dense"},
+    "cache-dense-pack": {"id": "EXP-023", "what": "EXP-023 dense cache re-packed into ~1 GB tar shards for vast.ai",
+                         "cache_name": "cache_256_dense"},
     "train-teacher": {"id": "EXP-002", "what": "teacher: EfficientNet-B0 @224, FOLD 0 ONLY x 15 epochs, blended report "
                       "labels (check one fold before spending GPU on all five; folds 1-4 = EXP-005)",
                       "exp": "effnet_224", "epochs": 15, "folds": [0], "extra": []},
@@ -171,22 +177,22 @@ json.dump(EXP, open("/kaggle/working/experiment.json", "w"))'''),
     ]
 
 
-def nb_cache():
+def nb_cache(key: str = "cache", cfg: str = "effnet_224", name: str = "cache_256"):
     return [
-        ("md", header("cache", "RSNA Knee — build the full training cache (CPU)",
+        ("md", header(key, "RSNA Knee — build the full training cache (CPU)",
                       "Decoding ~570 GB of DICOM is CPU work, so it runs here without spending GPU quota. The output "
-                      "(`cache_256/<StudyInstanceUID>.npz`, compressed to fit Kaggle's 20 GB output limit) is attached "
-                      "to the training notebooks.")),
-        ("code", exp_json("cache") + "\n" + FIND),
+                      f"(`{name}/<StudyInstanceUID>.npz`, compressed to fit Kaggle's 20 GB output limit) is attached "
+                      f"to the training notebooks / packed for vast.ai. Slot layout from `configs/exp/{cfg}.yaml`.")),
+        ("code", exp_json(key) + f"\nCFG, NAME = {cfg!r}, {name!r}\n" + FIND),
         ("md", "## What happens to each study\n"
                "1. **Pick series** — 6 slots: sagittal/coronal/axial × fluid-sensitive/not (same-plane fallback).\n"
                "2. **Order slices** by `ImagePositionPatient` along the slice normal (file names are random).\n"
                "3. **Canonical knee** — side from the image-centre x coordinate (tag as fallback); left knees are "
                "mirrored, sagittal runs lateral → medial.\n"
                "4. **Intensity** — per-series 1–99th percentile → uint8.\n"
-               "5. **Geometry** — 140 mm physical centre crop → 256×256; 72 slices sampled over 4–96% of each series "
-               "(20/10/16/8/14/4 per slot).\n"
-               "6. **Save** `image (72,256,256)`, `slot`, `valid`, `side`."),
+               "5. **Geometry** — 140 mm physical centre crop → 256×256; slices sampled evenly over 4–96% of each "
+               "series, per-slot counts from the config (`preprocess.slots`).\n"
+               "6. **Save** `image (D,256,256)`, `slot`, `valid`, `side`."),
         ("code", '''subprocess.run([sys.executable, "-m", "pip", "install", "-q", "iterative-stratification",
                 "pylibjpeg", "pylibjpeg-libjpeg", "pylibjpeg-openjpeg"], check=True)
 DATA = "/kaggle/tmp/data"; os.makedirs(DATA, exist_ok=True)
@@ -194,19 +200,20 @@ if not os.path.exists(f"{DATA}/raw"):
     os.symlink(COMP, f"{DATA}/raw")
 ENV = dict(os.environ, DATA_DIR=DATA, PYTHONPATH=CODE)
 t = time.time()
-subprocess.run([sys.executable, f"{CODE}/scripts/preprocess.py", "exp=effnet_224", "preprocess.compress=true",
-                f"preprocess.num_workers={os.cpu_count()}", "paths.cache_dir=/kaggle/working/cache_256"],
+subprocess.run([sys.executable, f"{CODE}/scripts/preprocess.py", f"exp={CFG}", "preprocess.compress=true",
+                f"preprocess.num_workers={os.cpu_count()}", f"paths.cache_dir=/kaggle/working/{NAME}"],
                env=ENV, check=True)
 print(f"preprocess {(time.time() - t) / 60:.1f} min")'''),
         ("md", "## Sanity checks"),
         ("code", '''import numpy as np
-files = sorted(glob.glob("/kaggle/working/cache_256/*.npz"))
+files = sorted(glob.glob(f"/kaggle/working/{NAME}/*.npz"))
 sides, cover = [], []
 for f in files[::10]:
     z = np.load(f); sides.append(int(z["side"])); cover.append(z["valid"].mean())
 size = sum(os.path.getsize(f) for f in files) / 2**30
 EXP.update(studies=len(files), size_gib=round(size, 2), side_R=sides.count(1), side_L=sides.count(-1),
-           side_unknown=sides.count(0), slot_coverage=round(float(np.mean(cover)), 4))
+           side_unknown=sides.count(0), slot_coverage=round(float(np.mean(cover)), 4),
+           slices_per_study=int(np.load(files[0])["image"].shape[0]))
 print(EXP)
 json.dump(EXP, open("/kaggle/working/experiment.json", "w"), indent=1)'''),
     ]
@@ -340,25 +347,25 @@ print(EXP); sub.head()'''),
     ]
 
 
-def nb_pack():
+def nb_pack(key: str = "cache-pack", name: str = "cache_256", source: str = "rsna-knee-cache"):
     return [
-        ("md", header("cache-pack", "RSNA Knee — pack the cache into shards",
+        ("md", header(key, "RSNA Knee — pack the cache into shards",
                       "Kaggle's API downloads notebook outputs file by file, so 4,407 `.npz` files are impractical to "
-                      "fetch on a rented GPU. This notebook re-packs `rsna-knee-cache` into a few plain `.tar` shards "
+                      "fetch on a rented GPU. This notebook re-packs `" + source + "` into a few plain `.tar` shards "
                       "(the npz files are already compressed) plus a manifest. `scripts/vast/get_data.sh` downloads "
                       "and unpacks them.")),
-        ("code", exp_json("cache-pack") + "\n" + FIND),
+        ("code", exp_json(key) + f"\nNAME = {name!r}\n" + FIND),
         ("code", '''import hashlib, tarfile
-CACHE = walk_find(lambda d, f: d if os.path.basename(d) == "cache_256" and any(x.endswith(".npz") for x in f[:50]) else None)
+CACHE = walk_find(lambda d, f: d if os.path.basename(d) == NAME and any(x.endswith(".npz") for x in f[:50]) else None)
 files = sorted(f for f in os.listdir(CACHE) if f.endswith(".npz"))
 total = sum(os.path.getsize(os.path.join(CACHE, f)) for f in files)
 n_shards = max(1, round(total / 2**30))            # ~1 GiB per shard
-manifest = {"studies": len(files), "bytes": total, "shards": []}
+manifest = {"name": NAME, "studies": len(files), "bytes": total, "shards": []}
 for k in range(n_shards):
-    name = f"cache_256_part{k:02d}.tar"
+    name = f"{NAME}_part{k:02d}.tar"
     with tarfile.open(f"/kaggle/working/{name}", "w") as tar:
         for f in files[k::n_shards]:
-            tar.add(os.path.join(CACHE, f), arcname=f"cache_256/{f}")
+            tar.add(os.path.join(CACHE, f), arcname=f"{NAME}/{f}")
     h = hashlib.sha256(open(f"/kaggle/working/{name}", "rb").read()).hexdigest()
     manifest["shards"].append({"file": name, "sha256": h, "bytes": os.path.getsize(f"/kaggle/working/{name}")})
     print(name, manifest["shards"][-1]["bytes"] / 2**20, "MiB")
@@ -515,6 +522,10 @@ if __name__ == "__main__":
     if args.inference_what:
         EXPERIMENTS["inference"]["what"] = args.inference_what
     write("cache-pack", nb_pack(), metadata("cache-pack", False, False, (), ["cache"]))
+    e = EXPERIMENTS["cache-dense"]
+    write("cache-dense", nb_cache("cache-dense", e["cfg"], e["cache_name"]), metadata("cache-dense", False, True))
+    write("cache-dense-pack", nb_pack("cache-dense-pack", e["cache_name"], "rsna-knee-cache-dense"),
+          metadata("cache-dense-pack", False, False, (), ["cache-dense"]))
     write("bench", nb_bench(), metadata("bench", True, False, (f"{USER}/rsna-knee-weights",), ()))
     write("iter02-a", nb_jobs("iter02-a"), metadata("iter02-a", True, True, LABEL_DATASETS, ["cache"]))
     write("iter02-b", nb_jobs("iter02-b"),

@@ -1,5 +1,6 @@
 """
-Download the packed cache (notebook <user>/rsna-knee-cache-pack) shard by shard and unpack it.
+Download a packed cache (notebook <user>/<pack>, default rsna-knee-cache-pack) shard by shard and unpack it.
+The cache directory name comes from the manifest (cache_256, cache_256_dense, ...).
 
 Fetching the whole notebook output in one `kaggle kernels output` call died silently on a vast.ai box
 (14 x 1.1 GB); one shard per call, each checksum-verified and retried, is reliable and resumable.
@@ -36,11 +37,12 @@ def main():
     ap.add_argument("--data", default="data")
     ap.add_argument("--user", required=True)
     ap.add_argument("--retries", type=int, default=5)
+    ap.add_argument("--pack", default="rsna-knee-cache-pack", help="pack notebook, e.g. rsna-knee-cache-dense-pack")
     ap.add_argument("--parallel", type=int, default=4,
                     help="shards downloaded at once (one request per shard; slow links benefit a lot)")
     a = ap.parse_args()
-    kernel = f"{a.user}/rsna-knee-cache-pack"
-    pack, dest = os.path.join(a.data, "_pack"), os.path.join(a.data, "processed")
+    kernel = f"{a.user}/{a.pack}"
+    pack, dest = os.path.join(a.data, f"_pack_{a.pack}"), os.path.join(a.data, "processed")
     os.makedirs(pack, exist_ok=True)
     os.makedirs(dest, exist_ok=True)
 
@@ -81,9 +83,10 @@ def main():
     with ThreadPoolExecutor(max(1, a.parallel)) as ex:
         list(ex.map(fetch, todo))
 
-    n = len([f for f in os.listdir(os.path.join(dest, "cache_256")) if f.endswith(".npz")])
+    name = man.get("name", "cache_256")
+    n = len([f for f in os.listdir(os.path.join(dest, name)) if f.endswith(".npz")])
     assert n == man["studies"], (n, man["studies"])
-    print(f"cache ok: {n} studies in {os.path.join(dest, 'cache_256')}")
+    print(f"cache ok: {n} studies in {os.path.join(dest, name)}")
 
 
 if __name__ == "__main__":

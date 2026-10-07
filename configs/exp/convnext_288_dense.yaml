@@ -1,0 +1,32 @@
+# ITER-04: ConvNeXt-S @288 on the DENSE cache (88 slices/study instead of 72).
+# Denser sampling where menisci / ligaments are read (sagittal, coronal): a typical ~30-slice series now keeps
+# ~26 of the ~28 slices in its central 4-96 % span, so a 3-slice window is (nearly) truly adjacent anatomy.
+# Evidence: Raptor CoAtNet 44 -> 64 -> 80 slices/study = LB 0.926 -> 0.928 -> 0.932 (docs/KAGGLE_RESOURCES.md).
+# Cache: built by the Kaggle CPU notebook rsna-knee-cache-dense (EXP-023), packed by rsna-knee-cache-dense-pack;
+# on vast: CACHE_PACK=rsna-knee-cache-dense-pack bash scripts/vast/get_data.sh
+# Size: ~0.2 GiB per slot-slice over 4,407 studies -> ~17.7 GiB (Kaggle output cap 20 GB).
+exp_name: convnext_small_288_dense
+paths:
+  cache_dir: ${paths.processed_data}/cache_256_dense
+preprocess:
+  res: 256
+  slots:
+    sag_fs: {plane: Sagittal, fluid: 1, n: 26}
+    sag_t1: {plane: Sagittal, fluid: 0, n: 14}
+    cor_fs: {plane: Coronal, fluid: 1, n: 20}
+    cor_t1: {plane: Coronal, fluid: 0, n: 10}
+    ax_fs: {plane: Axial, fluid: 1, n: 14}
+    ax_t1: {plane: Axial, fluid: 0, n: 4}
+model:
+  backbone: convnext_small.fb_in22k_ft_in1k
+  img_size: 288
+  drop_path_rate: 0.2
+windows:
+  k_train: 16
+  k_eval: 48
+training:
+  batch_size: 8                    # RTX 3090 (24 GB): ~21-22 GB; on a 16 GB T4 use 4 + accumulate_grad_batches 2
+  accumulate_grad_batches: 1
+  num_epochs: 15
+  lr: 5.0e-4
+  backbone_lr_mult: 0.1
