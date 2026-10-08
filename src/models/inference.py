@@ -32,10 +32,25 @@ from torch.utils.data import DataLoader
 from src.constants import ID_COL, LABELS
 from src.dataset.datasets import KneeStudyDataset, eval_windows, to_model_input
 from src.dataset.dicom import build_series_stack, build_study_stack, slot_specs_from_cfg
+from src.config import REPO_ROOT
 from src.kaggle_paths import find_competition_root
 from src.models.model import build_model
 
 # preprocessing fields that change the stack; others (num_workers, limit, compress) do not
+PLANE_IDS = {"Sagittal": 0, "Coronal": 1, "Axial": 2}
+
+
+def mirror_windows(x: torch.Tensor, slot: torch.Tensor, pos: torch.Tensor, planes, flip_pos: bool):
+    """Anatomical left/right mirror of a bag of 3-slice windows (B, K, 3, H, W): sagittal windows reverse their
+    slice (channel) order - left/right is the through-plane axis - coronal / axial windows flip image width.
+    With `flip_pos`, sagittal slice positions become 1 - pos (series run right -> left)."""
+    pl = torch.as_tensor(planes, device=slot.device)[slot.long()]
+    sag = (pl == 0)
+    xm = torch.where(sag[..., None, None, None], x.flip(2), x.flip(-1))
+    posm = torch.where(sag, 1 - pos, pos) if flip_pos else pos
+    return xm, posm
+
+
 PP_KEYS = ("slots", "res", "crop_mm", "span", "clip_percentiles", "canonical", "layout", "series_pick",
            "mm_per_px", "max_slices", "max_cands")
 
@@ -163,6 +178,14 @@ class Member:
         self.pp = OmegaConf.to_container(self.cfg.preprocess, resolve=True)
         self.w = OmegaConf.to_container(self.cfg.windows, resolve=True)
         self.series = self.pp.get("layout", "study") == "series"
+        # plane id (0 sagittal, 1 coronal, 2 axial) of every slot, for anatomical-mirror TTA
+        if self.series:
+            self.planes = [0, 1, 2, 0, 1, 2]  # slot = plane + 3 * (1 - fat suppression)
+        else:
+            self.planes = [PLANE_IDS.get(v["plane"], 0) for v in self.pp["slots"].values()]
+        # mirroring makes a right knee look like a left one: only valid for models that never canonicalised
+        # laterality (Raptor repro: canonical false; reader: fixed patient frame), not for right-knee-only models
+        self.mirror_ok = self.series or not self.pp.get("canonical", True)
 
     @property
     def contract(self):
@@ -191,7 +214,8 @@ def forward_safe(model, x, slot, mask, pos=None) -> torch.Tensor:
 
 
 @torch.no_grad()
-def predict_batch(groups: Dict[tuple, List[Member]], stacks: List[dict], device) -> Dict[str, np.ndarray]:
+def predict_batch(groups: Dict[tuple, List[Member]], stacks: List[dict], device,
+                  mirror: bool = False) -> Dict[str, np.ndarray]:
     """Run every member on one batch of studies; windows are built once per input contract."""
     out = {}
     for (k, img, mean, std, wkey, series), members in groups.items():
@@ -216,18 +240,29 @@ def predict_batch(groups: Dict[tuple, List[Member]], stacks: List[dict], device)
         pos = torch.from_numpy(np.stack(poss)).to(device)
         for mem in members:
             out[mem.path] = torch.sigmoid(forward_safe(mem.model, x, slot, mask, pos).float()).cpu().numpy()
+            if mirror and mem.mirror_ok:
+                xm, posm = mirror_windows(x, slot, pos, mem.planes, flip_pos=mem.series)
+                out[mem.path + "#mirror"] = torch.sigmoid(
+                    forward_safe(mem.model, xm, slot, mask, posm).float()).cpu().numpy()
+                del xm
     return out
 
 
 def run_stream(ids: List[str], dicom_dir: str, series: pd.DataFrame, ckpts: List[str], device, workers: int,
-               opts: dict, batch: int = 8, log_every: int = 100) -> Dict[str, np.ndarray]:
-    """All checkpoints' predictions (ckpt -> (N, 12), rows in `ids` order)."""
+               opts: dict, batch: int = 8, log_every: int = 100, mirror: bool = False) -> Dict[str, np.ndarray]:
+    """All checkpoints' predictions (ckpt -> (N, 12), rows in `ids` order); with `mirror`, eligible checkpoints
+    also get "<ckpt>#mirror" (anatomical-mirror pass)."""
     members = [Member(c, device) for c in ckpts]
     by_pp: Dict[str, List[Member]] = {}
     for m in members:
         by_pp.setdefault(pp_key(m.pp), []).append(m)
     row = {u: i for i, u in enumerate(ids)}
     preds = {m.path: np.zeros((len(ids), len(LABELS)), np.float32) for m in members}
+    if mirror:
+        preds.update({m.path + "#mirror": np.zeros((len(ids), len(LABELS)), np.float32)
+                      for m in members if m.mirror_ok})
+        print("[stream] mirror TTA for:", [os.path.basename(os.path.dirname(m.path)) + "/" + os.path.basename(m.path)
+                                          for m in members if m.mirror_ok], flush=True)
     t0, stack_s, gpu_s, n = time.time(), 0.0, 0.0, 0
     coverage = []  # fraction of valid slots per study (empty slots = missing or undecodable series)
     for mems in by_pp.values():
@@ -239,7 +274,7 @@ def run_stream(ids: List[str], dicom_dir: str, series: pd.DataFrame, ckpts: List
         def flush():
             nonlocal gpu_s
             tg = time.time()
-            res = predict_batch(groups, [d for _, d in buf], device)
+            res = predict_batch(groups, [d for _, d in buf], device, mirror)
             for path, p in res.items():
                 for j, (u, _) in enumerate(buf):
                     preds[path][row[u]] = p[j]
@@ -295,6 +330,11 @@ def main():
     ap.add_argument("--split", choices=["test", "train"], default="test",
                     help="train = reproduce the hidden-test run on training studies (debugging)")
     ap.add_argument("--limit", type=int, default=0, help="score only this many (random, non-gold) studies")
+    ap.add_argument("--fold_eval", type=int, default=None,
+                    help="with --split train: score fold k of configs/folds_5.csv + the gold studies (fold -1)")
+    ap.add_argument("--mirror_tta", action="store_true",
+                    help="average eligible models (no laterality canonicalisation) with an anatomical-mirror pass")
+    ap.add_argument("--save_raw", default=None, help="npz with ids + every checkpoint's plain / mirror predictions")
     a = ap.parse_args()
 
     ckpts = sorted({p for pat in a.ckpts for p in glob.glob(pat, recursive=True)})
@@ -303,6 +343,10 @@ def main():
     assert a.data_dir, "competition data not found; pass --data_dir"
     test = pd.read_csv(os.path.join(a.data_dir, f"{a.split}.csv"), dtype={ID_COL: str})
     series = pd.read_csv(os.path.join(a.data_dir, f"{a.split}_series.csv"), dtype={ID_COL: str, "SeriesInstanceUID": str})
+    if a.fold_eval is not None:
+        folds = pd.read_csv(os.path.join(REPO_ROOT, "configs", "folds_5.csv"), dtype={ID_COL: str})
+        keep = set(folds.loc[folds.fold.isin([a.fold_eval, -1]), ID_COL])
+        test = test[test[ID_COL].isin(keep)]
     if a.limit:
         test = test.sample(min(a.limit, len(test)), random_state=0)
     ids = test[ID_COL].tolist()
@@ -311,8 +355,12 @@ def main():
     opts = {"selective": bool(a.selective), "pct_stride": a.pct_stride, "threads": a.threads}
 
     if a.mode == "stream":
-        by_ckpt = run_stream(ids, dicom_dir, series, ckpts, device, a.workers, opts, batch=a.batch)
-        preds = [by_ckpt[c] for c in ckpts]
+        by_ckpt = run_stream(ids, dicom_dir, series, ckpts, device, a.workers, opts, batch=a.batch,
+                             mirror=a.mirror_tta)
+        if a.save_raw:
+            np.savez(a.save_raw, ids=np.asarray(ids), **{k.replace("/", "__"): v for k, v in by_ckpt.items()})
+            print(f"[infer] raw predictions -> {a.save_raw} ({len(by_ckpt)} arrays)")
+        preds = [(by_ckpt[c] + by_ckpt[c + "#mirror"]) / 2 if c + "#mirror" in by_ckpt else by_ckpt[c] for c in ckpts]
     else:
         by_pp = {}
         for c in ckpts:

@@ -67,6 +67,20 @@ def test_series_dataset(fake_comp, tmp_path):
         assert b["slot"].tolist() == sum([[s] * 3 for s in range(6)], [])
 
 
+def test_mirror_windows():
+    from src.models.inference import mirror_windows
+
+    x = torch.arange(2 * 2 * 3 * 2 * 3, dtype=torch.float32).view(2, 2, 3, 2, 3)
+    slot = torch.tensor([[0, 1], [1, 0]])
+    pos = torch.tensor([[0.2, 0.3], [0.4, 0.9]])
+    xm, pm = mirror_windows(x, slot, pos, planes=[0, 1], flip_pos=True)  # slot 0 sagittal, slot 1 coronal
+    assert torch.equal(xm[0, 0], x[0, 0].flip(0))       # sagittal: slice (channel) order reversed
+    assert torch.equal(xm[0, 1], x[0, 1].flip(-1))      # coronal: width flipped
+    assert torch.allclose(pm, torch.tensor([[0.8, 0.3], [0.4, 0.1]]))
+    xmm, pmm = mirror_windows(xm, slot, pm, planes=[0, 1], flip_pos=True)
+    assert torch.equal(xmm, x) and torch.allclose(pmm, pos)  # mirroring twice is the identity
+
+
 def _e2e(fake_comp, tmp_path, monkeypatch, exp, extra):
     monkeypatch.chdir(tmp_path)
     ov = [f"exp={exp}", f"paths.data_dir={fake_comp}", "labels.sources=[fake_labels.csv]", "data.num_folds=2",
@@ -102,6 +116,13 @@ def _e2e(fake_comp, tmp_path, monkeypatch, exp, extra):
     inference.main()
     sub = pd.read_csv("sub.csv")
     assert len(sub) == 3 and ((sub[LABELS] >= 0) & (sub[LABELS] <= 1)).all().all()
+    # anatomical-mirror TTA: both repro families are eligible (no laterality canonicalisation)
+    monkeypatch.setattr(sys, "argv", ["infer", "--data_dir", str(fake_comp / "raw"), "--ckpts",
+                                      f"models/smoke_{exp}/*.pt", "--workers", "2", "--out", "sub_m.csv",
+                                      "--mirror_tta", "--save_raw", "raw.npz"])
+    inference.main()
+    raw = np.load("raw.npz")
+    assert any(k.endswith("#mirror") for k in raw.files) and len(raw["ids"]) == 3
 
 
 @pytest.mark.slow
