@@ -1,0 +1,14 @@
+cache_336_raptor studies: 4407 16:43
+raptor_repro batch 8 x accumulate 1 (batch  6 x 12 windows @384: peak 15.7 / 23.6 GiB | 1.27 s/step | 4.7 studies/s;batch  8 x 12 windows @384: peak 20.6 / 23.6 GiB | 1.69 s/step | 4.7 studies/s;) 16:44
+raptor_repro FAILED 16:44
+--- restart (expandable_segments + retry)
+cache_336_raptor studies: 4407 16:46
+raptor_repro batch 8 x accumulate 1 (batch  6 x 12 windows @384: peak 15.7 / 23.6 GiB | 1.27 s/step | 4.7 studies/s;batch  8 x 12 windows @384: peak 20.6 / 23.6 GiB | 1.69 s/step | 4.7 studies/s;) 16:46
+after: waiting for raptor_repro training (paused chain pid 4604) 16:52
+raptor_repro: rebuilding OOF / gold predictions (predict_only) 21:03
+raptor_repro metrics: OOF 0.877 gold 0.89908 min 10.7 21:14
+raptor_repro UPLOADED 21:14
+cache_280_reader studies: 4407 21:36
+reader_repro metrics: OOF 0.88543 gold 0.90742 min 145.4 00:01
+reader_repro UPLOADED 00:02
+CHAIN_DONE 00:02
