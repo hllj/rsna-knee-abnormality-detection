@@ -67,6 +67,21 @@ def test_series_dataset(fake_comp, tmp_path):
         assert b["slot"].tolist() == sum([[s] * 3 for s in range(6)], [])
 
 
+def test_topk_last_mode():
+    from types import SimpleNamespace
+
+    from src.models.train_pl import TopKAverage
+
+    model = torch.nn.Linear(2, 1)
+    module = SimpleNamespace(model=model)
+    for mode, expect in (("best", [0.9, 0.8]), ("last", [0.5, 0.4])):
+        cb = TopKAverage("val_auc_gold", k=2, mode=mode)
+        for score in (0.9, 0.8, 0.5, 0.4):
+            trainer = SimpleNamespace(sanity_checking=False, callback_metrics={"val_auc_gold": torch.tensor(score)})
+            cb.on_validation_end(trainer, module)
+        assert [round(s, 2) for s, _ in cb.kept] == expect, mode
+
+
 def test_mirror_windows():
     from src.models.inference import mirror_windows
 

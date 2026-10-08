@@ -135,6 +135,7 @@ training:
   schedule: cosine                 # cosine (warmup_epochs) | onecycle (pct_start)
   pct_start: 0.15
   top_k_average: 3                 # average weights of best-k epochs at the end
+  top_k_mode: best                 # best (by monitor) | last (last k epochs; all-data runs)
   monitor: val_auc_report          # macro AUC vs report labels on the held-out fold
   max_time: null                   # wall-clock cap "DD:HH:MM:SS" (Kaggle 12 h sessions); stops cleanly
   val_every: 1                     # validate every n epochs (heavy backbones: 2)

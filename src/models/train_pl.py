@@ -153,10 +153,12 @@ class EMA(Callback):
 
 
 class TopKAverage(Callback):
-    """Keep the best-k epoch weights (by `monitor`) on CPU and load their average at the end."""
+    """Keep the best-k epoch weights (by `monitor`) on CPU and load their average at the end.
+    mode="last" keeps the last k validated epochs instead (all-data runs: the only validation left is gold-58,
+    which is too small to pick epochs - discussion 746792 saw a gold-picked epoch lose on the LB)."""
 
-    def __init__(self, monitor: str, k: int = 3):
-        self.monitor, self.k = monitor, k
+    def __init__(self, monitor: str, k: int = 3, mode: str = "best"):
+        self.monitor, self.k, self.mode = monitor, k, mode
         self.kept: List = []  # (score, state_dict)
 
     def on_validation_end(self, trainer, pl_module):
@@ -166,7 +168,10 @@ class TopKAverage(Callback):
         score = float(trainer.callback_metrics[self.monitor])
         sd = {k: v.detach().cpu().clone() for k, v in pl_module.model.state_dict().items()}
         self.kept.append((score, sd))
-        self.kept = sorted(self.kept, key=lambda t: -t[0])[: self.k]
+        if self.mode == "last":
+            self.kept = self.kept[-self.k:] if self.k else []
+        else:
+            self.kept = sorted(self.kept, key=lambda t: -t[0])[: self.k]
 
     def on_fit_end(self, trainer, pl_module):
         if not self.kept:
@@ -276,7 +281,7 @@ def main():
             name=f"{cfg.exp_name}_fold{cfg.fold}", tags=list(cfg.logging.wandb.tags),
             config=OmegaConf.to_container(cfg, resolve=True),
         ))
-    topk = TopKAverage(monitor, cfg.training.top_k_average)
+    topk = TopKAverage(monitor, cfg.training.top_k_average, cfg.training.get("top_k_mode", "best"))
     callbacks = [topk, LearningRateMonitor("step")]
     if float(cfg.training.get("ema", 0) or 0) > 0:  # after topk: restores the live weights after each validation
         callbacks.append(EMA(float(cfg.training.ema), bool(cfg.training.get("ema_eval", True))))

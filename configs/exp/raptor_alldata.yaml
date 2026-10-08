@@ -1,0 +1,60 @@
+# ITER-07 / EXP-054 — all-data Raptor: raptor_repro trained on ALL 4,349 non-gold studies (fold=-1), averaging the
+# last 3 epochs (no held-out fold; gold-58 is too small to pick epochs). Labels: our default blend + JEV (riadmohamed42/
+# jev-knee-labels HYBRID scores) as a 4th source at weight 2 (gold-58 0.8911 -> 0.8929). Idea: discussion 746792
+# (their all-data CoAtNet recipe scored 0.939 vs our fold-0 Raptor 0.928). Extra blend member next to the 5 folds.
+exp_name: raptor_alldata
+paths:
+  cache_dir: ${paths.processed_data}/cache_336_raptor
+preprocess:
+  res: 336
+  crop_mm: 140
+  span: [0.02, 0.98]
+  clip_percentiles: [2, 98]
+  canonical: false
+  slots:                           # fluid -1 = any series of the plane (not already used by an earlier slot)
+    sag_fluid: {plane: Sagittal, fluid: 1, n: 22}
+    sag_2nd: {plane: Sagittal, fluid: 0, n: 18}
+    cor_fluid: {plane: Coronal, fluid: 1, n: 15}
+    cor_2nd: {plane: Coronal, fluid: -1, n: 10}
+    axial: {plane: Axial, fluid: -1, n: 15}
+model:
+  backbone: coatnet_rmlp_2_rw_384.sw_in12k_ft_in1k
+  img_size: 384
+  head: tanh_mil                   # LayerNorm -> Linear(F,256)-Tanh-Dropout(0.2)-Linear(256,12), softmax per finding
+  slot_embedding: false
+  drop_rate: 0.2                   # attention-head dropout (Raptor: Dropout 0.2 after Tanh)
+  drop_path_rate: 0.0
+  grad_checkpointing: true
+  channels_last: true
+windows:
+  k_train: 12
+  k_eval: 0                        # 0 = every window position (78 for 80 slices): final OOF / gold / test
+  k_val: 24                        # per-epoch validation (Raptor's trainer validates at k_eval 24)
+  sampling: uniform                # random centres (with replacement when k > available)
+  cross_slot: true                 # Raptor windows run over the concatenated stack
+augmentation:
+  preset: gain_only                # +-10% global intensity gain, nothing else
+  window_dropout: 0.0
+training:
+  batch_size: 8                    # memory probe on the box first; fallback 4 x accumulate 2
+  accumulate_grad_batches: 1
+  num_epochs: 16
+  lr: 1.0e-3                       # head
+  backbone_lr_mult: 0.03           # backbone 3e-5
+  weight_decay: 0.02
+  schedule: onecycle
+  pct_start: 0.15
+  loss: bce_posweight              # pos_weight = clip((1-p)/p, 1, 10), p = label prevalence clipped [0.03, 0.7]
+  gradient_clip_val: 3.0
+  precision: bf16-mixed
+  ema: 0.0
+  top_k_average: 3
+  top_k_mode: last                 # no held-out fold: average the last 3 epochs
+  val_every: 1
+labels:
+  sources:
+    - llm_labels_v4_blend.csv      # stevenleehans/rsna-knee-llm-report-labels
+    - llm_labels_full.csv          # stevenleehans/rsna-knee-llm-report-labels
+    - report_labels_v2.csv         # pilkwang/rsna-knee-llm-labels
+    - HYBRID_labels_scores.csv     # riadmohamed42/jev-knee-labels (JEV), CC0
+  weights: [1, 1, 1, 2]
