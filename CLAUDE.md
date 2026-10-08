@@ -32,9 +32,11 @@ Final submission deadline 2026-10-22 (team merge / entry 2026-10-15). 5 submissi
 * Run `pytest -m "not slow"` (and `pytest -m slow` for pipeline changes) before committing code.
 
 ## Where things are
-* Current best: **EXP-047**, 3-way fold-0 blend — ConvNeXt-S dense (exp-024-fold0) + Raptor repro (`raptor_repro`,
-  Kaggle Model `rsna-knee-raptor-repro/exp-041-fold0`) + reader repro (`reader_repro`, `rsna-knee-reader-repro/
-  exp-042-fold0`), equal family rank weights, public LB **0.934** (ITER-06 report). Best single fold 0: Raptor repro
+* Current best: **EXP-049**, public LB **0.936** — ConvNeXt-S dense 5 folds (exp-024-fold0, exp-026-fold1 **v2**,
+  exp-026-fold2..4) + Raptor repro f0 (`raptor_repro`, Kaggle Model `rsna-knee-raptor-repro/exp-041-fold0`) + reader
+  repro f0 (`reader_repro`, `rsna-knee-reader-repro/exp-042-fold0`) + CoAtNet dense f0 (`rsna-knee-coatnet2-384-dense/
+  exp-028-fold0`), `--family-weights "convnext_small_288_dense=0.3,raptor_repro=0.3,reader_repro=0.3,
+  coatnet2_384_dense=0.1"` (ITER-06 report). EXP-048 (no CoAtNet, equal) 0.935; EXP-047 (all fold 0) 0.934. Best single fold 0: Raptor repro
   LB 0.928 (OOF 0.8770). Previous: EXP-027 ConvNeXt-S dense 5 folds 0.930; fold-0 gate bar: OOF 0.8745, gold 0.9037
   (`runs/EXP-024/`).
   Checkpoints: Kaggle Model `hlly34/rsna-knee-convnext-s-288-dense` (exp-024-fold0, exp-026-fold1 **v2**, exp-026-fold2..4).
