@@ -11,8 +11,8 @@ Training / inference pipeline for [rsna-knee-abnormality-detection](https://www.
 | [docs/VAST.md](docs/VAST.md) | details of the rented-GPU workflow below |
 | [experiments/EXPERIMENTS.md](experiments/EXPERIMENTS.md) | every experiment: CV, gold-58, public LB |
 
-**Current best: EXP-027 — ConvNeXt-S @288 on the dense 88-slice cache, 5 folds, rank-averaged → public LB 0.930**
-(OOF 0.878 vs report labels, gold-58 ensemble 0.910). Previous: EXP-020 (72-slice cache) 0.926, EXP-009 EfficientNet 0.914. Full history in [experiments/EXPERIMENTS.md](experiments/EXPERIMENTS.md).
+**Current best: EXP-047 — 3-way fold-0 blend (ConvNeXt-S dense + Raptor repro + reader repro), equal rank weights → public LB 0.934**
+(fold-0 OOF 0.883, gold-58 0.916). Previous: EXP-027 ConvNeXt-S dense 5 folds 0.930, EXP-020 0.926, EXP-009 0.914. Full history in [experiments/EXPERIMENTS.md](experiments/EXPERIMENTS.md).
 
 | Exp | What | OOF | Gold-58 | Public LB |
 |---|---|---|---|---|
@@ -28,7 +28,11 @@ Training / inference pipeline for [rsna-knee-abnormality-detection](https://www.
 | EXP-022 | blend: ConvNeXt-S 5 folds (0.7) + EfficientNet-B0 5 folds (0.3) | 0.879 | 0.902 | 0.925 (neutral) |
 | EXP-025 | ConvNeXt-S @288 **dense cache** (88 slices) fold 0 | 0.875 | 0.904 | 0.926 |
 | EXP-029 | ConvNeXt-S @288 dense fold 1 | 0.887 | 0.903 | 0.925 |
-| **EXP-027** | **ConvNeXt-S @288 dense cache, 5 folds rank-averaged** | **0.878** | **0.910** | **0.930** |
+| EXP-027 | ConvNeXt-S @288 dense cache, 5 folds rank-averaged | 0.878 | 0.910 | 0.930 |
+| EXP-040 | CoAtNet-2 @384 dense fold 0 (our recipe) | 0.868 | 0.909 | 0.924 |
+| EXP-045 | **Raptor repro** fold 0 (ITER-06: CoAtNet-2 @384, 80 slices @336, all 78 windows) | 0.877 | 0.899 | 0.928 |
+| EXP-046 | **reader repro** fold 0 (ITER-06: ConvNeXt-T transformer-MIL, per-series cache) | 0.869 | 0.907 | 0.922 |
+| **EXP-047** | **3-way fold-0 blend: ConvNeXt dense + Raptor + reader, equal rank weights** | **0.883** | **0.916** | **0.934** |
 
 Iteration reports: [ITER-01 baseline](experiments/reports/ITER-01_2026-09-28.md) ·
 [ITER-01b inference speed-up](experiments/reports/ITER-01b_inference_speedup.md) ·
