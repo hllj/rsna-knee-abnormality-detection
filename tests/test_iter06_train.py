@@ -113,6 +113,14 @@ def test_e2e_raptor_repro(fake_comp, tmp_path, monkeypatch):
 
 
 @pytest.mark.slow
+def test_e2e_reader_v2_ema_topk(fake_comp, tmp_path, monkeypatch):
+    """EMA + top-k averaging together: top-k must keep (and export) the EMA weights."""
+    _e2e(fake_comp, tmp_path, monkeypatch, "reader_v2", [
+        "preprocess.res=48", "preprocess.mm_per_px=0.7", "preprocess.max_slices=8", "model.img_size=40",
+        "windows.k_train=2", "windows.k_eval=3", "training.top_k_average=2"])
+
+
+@pytest.mark.slow
 def test_e2e_reader_repro(fake_comp, tmp_path, monkeypatch):
     _e2e(fake_comp, tmp_path, monkeypatch, "reader_repro", [
         "preprocess.res=48", "preprocess.mm_per_px=0.7", "preprocess.max_slices=8", "model.img_size=40",
