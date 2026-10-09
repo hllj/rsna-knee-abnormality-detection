@@ -144,3 +144,8 @@ judged alone vs EXP-058 (0.930), not as an extra copy.
 - **Rule status:** OAI-derived weights are unanswered by the host (743416).
   - Use as a **fallback final pick** only if the host allows it.
   - Keep a rule-safe pick (our best own blend) as the other final submission.
+
+**Update 2026-10-09 14:16 UTC — step B done.** EXP-065 `raptor_v2_d96_alldata`: averaged model gold-58 **0.9142**
+(best-3 epochs 10/11/15 at 0.9077/0.9076/0.9068), 255 min; step A EXP-064 was 0.9137. Uploaded as
+`rsna-knee-raptor-v2-d96/exp-065-fold-1`; box 54969524 destroyed. EXP-068 (alone, K94 + mirror TTA) = inference v39,
+verified, scheduled 2026-10-10 07:08 local.
