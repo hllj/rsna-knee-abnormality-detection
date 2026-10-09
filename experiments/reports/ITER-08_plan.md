@@ -132,3 +132,15 @@ The 0.950 per-finding weights are commented with gold-58 AUCs, i.e. tuned on 58 
 **Update 2026-10-09 08:31:** EXP-059 = **0.936** (no change vs EXP-055). Per section 3 / the strategy rule:
 **skip** plain all-data ConvNeXt and a plain 2nd Raptor seed. Step A (EXP-064) stays: it tests a different *recipe*,
 judged alone vs EXP-058 (0.930), not as an extra copy.
+
+## 9. Option B — OAI fallback blend (owner decision 2026-10-09)
+| EXP | What | Notebook | Status |
+|---|---|---|---|
+| **EXP-069** | **0.65 × nartaa's 0.949 CoAtNet** (scored source vendored verbatim in `submission/external/`, sha256 `bcd864cb`, checkpoint sha `7e5315da`) **+ 0.35 × our EXP-055 blend** (ConvNeXt 5f + Raptor 5f + reader v1 f0 + CoAtNet f0), per-finding rank fusion | inference v36: verified on the public test; external stage first (subprocess, both GPUs), then ours, then fusion; ~4.6 h hidden | scheduled 2026-10-10 07:05 local (00:05 UTC) |
+
+- **Weight 0.65 / 0.35** is a prior, not tuned: nartaa's model has no out-of-fold predictions, and it used gold-58 for
+  selection, so gold is biased for it. Versia-5 fused it with one ConvNeXt reader at 0.03–0.35 per finding for +0.001;
+  our blend is stronger and more diverse, hence the larger share.
+- **Rule status:** OAI-derived weights are unanswered by the host (743416).
+  - Use as a **fallback final pick** only if the host allows it.
+  - Keep a rule-safe pick (our best own blend) as the other final submission.
