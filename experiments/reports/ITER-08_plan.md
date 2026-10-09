@@ -109,3 +109,22 @@ The 0.950 per-finding weights are commented with gold-58 AUCs, i.e. tuned on 58 
 3. DINOv2-S / RadImageNet fold 0 (section 2).
 4. Mirror TTA for the Raptor members if runtime allows (5 folds + all-data at 2× is ~8 h, too slow; all-data only
    is fine).
+
+## 8. ITER-08 experiments (registry ids; updated as they run)
+| EXP | Type | What | Config / notebook | Status |
+|---|---|---|---|---|
+| EXP-059 | submit | (from ITER-07) final blend v2: ConvNeXt 5f + Raptor 5f + all-data Raptor + reader v1 + CoAtNet (0.3/0.15/0.15/0.3/0.1) | inference v35 | scoring (~09:00 UTC) |
+| **EXP-064** | train | **Step A — Raptor v2 all-data:** nartaa recipe (backbone 4.01e-5, head 1.95e-3, wd 0.0588, effective batch 16), best-3 epochs **by gold-58**, 80-slice cache, blend + JEV x2 | `raptor_v2_alldata`, `fold=-1` | **next on the 3090** |
+| **EXP-066** | cache | **96-slice native-384 cache** (26/22/18/12/18, 2–98%, 140 mm, 384 px), 5 Kaggle CPU parts, ~44 GB | `rsna-knee-cache-r96-p0..p4` | **building now** (free) |
+| **EXP-065** | train | **Step B — Raptor v2 on the 96-slice cache**, every window (94) at test + mirror TTA | `raptor_v2_d96_alldata`, `fold=-1` | after step A, if the cache is ready |
+| EXP-067 | submit | step A alone (vs all-data Raptor EXP-058 = 0.930) | tbd | after EXP-064 |
+| EXP-068 | submit | step B alone, with mirror TTA | tbd | after EXP-065 |
+| EXP-061 | train | all-data reader (v1 recipe) | `reader_alldata` (to add) | planned, after A/B |
+| EXP-062 | train | DINOv2-S fold 0 (new family) | to implement | planned |
+| EXP-063 | train | RadImageNet ResNet-50 fold 0 (new family) | to implement | planned |
+
+**Selection note for A and B:**
+- **Choice:** the user chose nartaa's protocol, i.e. the 3 epochs with the best gold-58 AUC averaged (`top_k_mode: best`,
+  monitor `val_auc_gold`, 24 windows per epoch).
+- **Caveat:** gold-58 has a bootstrap SD of ±0.014, so the choice among late epochs is partly noise.
+- **Check:** the trainer logs every epoch's gold, so the picked epochs can be compared with the last 3 afterwards.

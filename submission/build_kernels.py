@@ -40,6 +40,10 @@ EXPERIMENTS = {
     **{f"cache-raptor-p{i}": {"id": "EXP-043", "what": f"Raptor-repro cache part {i + 1}/3: 80 slices (22/18/15/10/15) over "
                               "2-98%, 140 mm @336 px, 2-98 pct, no canonicalisation", "cfg": "raptor_repro",
                               "cache_name": "cache_336_raptor", "part": i, "parts": 3} for i in range(3)},
+    **{f"cache-r96-p{i}": {"id": "EXP-066", "what": f"96-slice native-384 cache part {i + 1}/5 (nartaa geometry: "
+                           "26/22/18/12/18 over 2-98%, 140 mm @384 px, 2-98 pct, no canonicalisation)",
+                           "cfg": "raptor_v2_d96_alldata", "cache_name": "cache_384_d96", "part": i, "parts": 5}
+       for i in range(5)},
     **{f"cache-reader-p{i}": {"id": "EXP-044", "what": f"reader-repro cache part {i + 1}/4: every series, native slices "
                               "<= 64, LPS in-plane frame, 0.55 mm/px @280, 1-99.5 pct", "cfg": "reader_repro",
                               "cache_name": "cache_280_reader", "part": i, "parts": 4} for i in range(4)},
@@ -593,11 +597,14 @@ if __name__ == "__main__":
     steps = {"raptor": "1. **Series per slot** — sag fluid 22, 2nd sag 18, cor fluid 15, 2nd cor 10, axial 15 slices.\n"
                        "2. **Slices** sorted by position, sampled evenly over 2–98% of each series; no left/right mirroring.\n"
                        "3. **Crop** 140 mm → 336 px (0.417 mm/px); per-series 2–98 percentile → uint8.",
+             "r96": "1. **Series per slot**: sag fluid 26, 2nd sag 22, cor fluid 18, 2nd cor 12, axial 18 slices.\n"
+                    "2. **Slices** sorted by position, sampled evenly over 2–98% of each series; no left/right mirroring.\n"
+                    "3. **Crop** 140 mm → native 384 px (0.365 mm/px); per-series 2–98 percentile → uint8.",
              "reader": "1. **Every series** (largest 2 per plane × fat-suppression slot), native slices (≤ 64).\n"
                        "2. **Reorient** to a fixed patient frame (transpose / flips from ImageOrientationPatient).\n"
                        "3. **Resample** to 0.55 mm/px in a 154 mm frame (280 px); 1–99.5 percentile → uint8."}
     for key, e in EXPERIMENTS.items():
-        if key.startswith(("cache-raptor-p", "cache-reader-p")):
+        if key.startswith(("cache-raptor-p", "cache-reader-p", "cache-r96-p")):
             write(key, nb_cache_part(key, e["cfg"], e["cache_name"], e["part"], e["parts"], steps[key.split("-")[1]]),
                   metadata(key, False, True))
     write("bench", nb_bench(), metadata("bench", True, False, (f"{USER}/rsna-knee-weights",), ()))
