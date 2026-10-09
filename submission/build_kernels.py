@@ -363,7 +363,8 @@ print(EXP)'''),
     return cells
 
 
-def nb_inference(weights: str = None, family_weights: str = None, infer_args: str = None):
+def nb_inference(weights: str = None, family_weights: str = None, infer_args: str = None,
+                 ext_weight: float = None):
     srcs = ", ".join(f"`{USER}/rsna-knee-{s}` ({EXPERIMENTS[s]['id']})" for s in EXPERIMENTS["inference"]["sources"])
     if weights:
         srcs = f"the weights dataset `{weights}` (uploaded by `scripts/vast/submit.sh`)"
@@ -372,7 +373,8 @@ def nb_inference(weights: str = None, family_weights: str = None, infer_args: st
                       f"Scores the hidden test set with every fold model attached from {srcs}. Test DICOMs go "
                       "through exactly the same preprocessing as training (`src/dataset/dicom.py`); each model's "
                       "predictions are converted to per-finding ranks (AUC only depends on order) and averaged.")),
-        ("code", exp_json("inference") + f"\nFAMILY_WEIGHTS = {family_weights!r}\nINFER_ARGS = {(infer_args or '').split()!r}\n" + FIND),
+        ("code", exp_json("inference") + f"\nFAMILY_WEIGHTS = {family_weights!r}\nINFER_ARGS = {(infer_args or '').split()!r}\n"
+         f"EXT_WEIGHT = {ext_weight!r}   # rank weight of the external nartaa 0.949 stage (None = off)\n" + FIND),
         ("md", "## 1. Offline dependencies and checkpoints\nThe pylibjpeg wheels come from a training notebook's "
                "output (needed for JPEG-compressed DICOMs)."),
         ("code", '''WHEELS = walk_find(lambda d, f: d if any(x.startswith("pylibjpeg") and x.endswith(".whl") for x in f) else None)
@@ -381,7 +383,9 @@ if WHEELS:
     subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-index", "--no-deps", "--find-links", WHEELS,
                     "pylibjpeg", "pylibjpeg-libjpeg", "pylibjpeg-openjpeg"], check=False)
 CKPTS = []
-walk_find(lambda d, f: CKPTS.extend(os.path.join(d, x) for x in sorted(f) if x.endswith(".pt")) and None)
+# our checkpoints only: the external stage's weights (no cfg inside) are run by its own script
+walk_find(lambda d, f: CKPTS.extend(os.path.join(d, x) for x in sorted(f) if x.endswith(".pt")
+                                    and "rsna-knee-publication-swa-weights" not in d) and None)
 print("wheels:", WHEELS)
 try:
     import pylibjpeg, libjpeg, openjpeg  # noqa: F401  JPEG / JPEG-2000 DICOM decoders
@@ -390,6 +394,14 @@ except ImportError as e:
     print("JPEG decoders MISSING:", e)
 for c in CKPTS: print(" ", c)
 assert CKPTS, "attach the training notebooks' outputs"'''),
+        *([("md", "## 1b. External stage — nartaa's 0.949 CoAtNet (verbatim scored source, OAI-trained; fallback pick)"),
+           ("code", '''import shutil
+t_ext = time.time()
+subprocess.run([sys.executable, f"{CODE}/submission/external/nartaa_0949_check.py"], check=True)
+subprocess.run([sys.executable, f"{CODE}/submission/external/nartaa_0949_inference.py"], check=True, cwd="/kaggle/working")
+shutil.move("/kaggle/working/submission.csv", "/kaggle/working/ext_nartaa.csv")
+EXT_SECONDS = round(time.time() - t_ext)
+print(f"external stage {EXT_SECONDS}s")''')] if ext_weight else []),
         ("md", "## 2. Predict and rank-average"),
         ("code", '''t0 = time.time()
 from src.models.inference import main
@@ -398,12 +410,24 @@ sys.argv = ["inference", "--data_dir", COMP, "--ckpts", *CKPTS, "--rank_average"
             "--workers", str(os.cpu_count()), "--out", "/kaggle/working/submission.csv"]
 main()
 print(f"inference {time.time() - t0:.0f}s")'''),
+        *([("code", '''import pandas as pd
+# rank fusion: EXT_WEIGHT x nartaa (external) + (1 - EXT_WEIGHT) x our blend, per finding, then re-rank
+ours = pd.read_csv("/kaggle/working/submission.csv", dtype={"StudyInstanceUID": str}).set_index("StudyInstanceUID")
+ext = pd.read_csv("/kaggle/working/ext_nartaa.csv", dtype={"StudyInstanceUID": str}).set_index("StudyInstanceUID")
+assert set(ours.index) == set(ext.index), "external and our predictions cover different studies"
+ext = ext.loc[ours.index, ours.columns]
+fused = EXT_WEIGHT * ext.rank(pct=True) + (1 - EXT_WEIGHT) * ours.rank(pct=True)
+fused = fused.rank(pct=True)
+assert fused.notna().all().all()
+fused.reset_index().to_csv("/kaggle/working/submission.csv", index=False)
+print("fused", fused.shape, "| ext weight", EXT_WEIGHT)''')] if ext_weight else []),
         ("code", '''import numpy as np, pandas as pd
 sub = pd.read_csv("/kaggle/working/submission.csv")
 files = glob.glob("/tmp/knee_cache/*/*.npz")   # only written in --mode cache (stream keeps stacks in memory)
 EXP.update(models=len(CKPTS), test_studies=len(sub), seconds=round(time.time() - t0),
            ckpts=[os.path.join(os.path.basename(os.path.dirname(c)), os.path.basename(c)) for c in CKPTS],
-           ckpt_paths=CKPTS, family_weights=FAMILY_WEIGHTS,
+           ckpt_paths=CKPTS, family_weights=FAMILY_WEIGHTS, ext_weight=EXT_WEIGHT,
+           ext_seconds=globals().get("EXT_SECONDS"),
            upload_ids=[])
 walk_find(lambda d, f: EXP["upload_ids"].extend(sorted(x for x in f if x.startswith("UPLOAD_"))) and None)
 if files:
@@ -582,6 +606,8 @@ if __name__ == "__main__":
                     help="Kaggle Model variations to attach, e.g. hlly34/rsna-knee-effnet-b0-224/pyTorch/exp-009-fold0/1")
     ap.add_argument("--extra-datasets", nargs="*", default=[], help="extra datasets to attach (e.g. hlly34/rsna-knee-wheels)")
     ap.add_argument("--family-weights", default=None, help='e.g. "convnext_small_288=0.7,effnet_b0_224=0.3"')
+    ap.add_argument("--ext-weight", type=float, default=None,
+                    help="add the external nartaa 0.949 stage (submission/external) with this rank weight")
     ap.add_argument("--infer-args", default=None,
                     help='extra src/models/inference.py args, e.g. "--split train --limit 64" (debug a failed hidden run)')
     args = ap.parse_args()
@@ -621,7 +647,8 @@ if __name__ == "__main__":
         meta = metadata("inference", True, False, tuple(args.extra_datasets), ())
         meta["model_sources"] = list(args.model_sources)
         write("inference", nb_inference(weights="Kaggle Models: " + ", ".join(sorted({m.split("/")[1] for m in args.model_sources})),
-                                        family_weights=args.family_weights, infer_args=args.infer_args), meta)
+                                        family_weights=args.family_weights, infer_args=args.infer_args,
+                                        ext_weight=args.ext_weight), meta)
     elif args.weights_dataset:
         EXPERIMENTS["inference"]["sources"] = []
         write("inference", nb_inference(weights=args.weights_dataset, family_weights=args.family_weights),
