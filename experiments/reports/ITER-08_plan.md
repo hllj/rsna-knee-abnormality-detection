@@ -128,3 +128,7 @@ The 0.950 per-finding weights are commented with gold-58 AUCs, i.e. tuned on 58 
   monitor `val_auc_gold`, 24 windows per epoch).
 - **Caveat:** gold-58 has a bootstrap SD of ±0.014, so the choice among late epochs is partly noise.
 - **Check:** the trainer logs every epoch's gold, so the picked epochs can be compared with the last 3 afterwards.
+
+**Update 2026-10-09 08:31:** EXP-059 = **0.936** (no change vs EXP-055). Per section 3 / the strategy rule:
+**skip** plain all-data ConvNeXt and a plain 2nd Raptor seed. Step A (EXP-064) stays: it tests a different *recipe*,
+judged alone vs EXP-058 (0.930), not as an extra copy.

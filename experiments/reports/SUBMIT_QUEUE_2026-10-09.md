@@ -25,3 +25,6 @@ Mirror TTA stays off for blends with 5 Raptor folds: runtime would roughly doubl
 - **Reader:** v1 stays. Training it on our labels (v2) raised CV against those same labels but lowered LB.
 - **All-data model:** on par with a 5-fold ensemble (0.930), so worth more all-data models (ConvNeXt, a 2nd
   Raptor seed).
+
+**EXP-059 = 0.936** (2026-10-09 08:31 UTC). Splitting the Raptor share between the 5 folds and the all-data model
+changes nothing at LB resolution. Same-family additions (5 folds, all-data, seeds) are saturated in this blend.
