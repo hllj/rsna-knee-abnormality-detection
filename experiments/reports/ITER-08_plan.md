@@ -56,3 +56,56 @@ Otherwise: skip both.
 - **Cost:** ~$5–6 incl. storage and downloads. Size the disk to the caches. Destroy at the end.
 - **Submissions:** each new model alone (fold 0), then blends.
 - **Deadlines:** team merge **10-15** (decide on teaming / public stack by then), final **10-22**.
+
+## 6. Lessons from `evgendvorkin/rsna-versia-5` (read 2026-10-09)
+**What the public 0.950 actually is** (changelog in the notebook):
+- 0.937 → 0.943: more CoAt "arms" and members (incl. a reverse-flip arm), routing one finding (Lateral Meniscus) fully
+  to the strongest branch, k_eval 94, and family reduction in probability space.
+- 0.950 replaces the ~45-checkpoint stack with **two readers**:
+  - **nartaa's single CoAtNet** `raptor_ft_alldata_t16_blendjev_oai_d96_r384_swa.pt` (0.949 alone);
+  - goodpjw's ConvNeXt-T reader at per-finding weights 0.03–0.35 (fusion adds about +0.001).
+
+**The CoAtNet is our Raptor reproduction's architecture** (identical `RaptorClassifier` tanh-MIL head, CoAtNet-RMLP-2,
+ImageNet norm, cross-slot windows). The differences are the recipe and data:
+
+| | nartaa 0.949 | our all-data Raptor (EXP-054, LB 0.930) |
+|---|---|---|
+| Training data | all 4,349 + **2,399 OAI knees** (external) | all 4,349 |
+| Cache | **96 slices** (26/22/18/12/18, axial any), **native 384 px** | 80 slices (22/18/15/10/15), 336 → 384 |
+| Labels | own + steven + pilkwang + **JEV** | default blend + JEV (w 2) |
+| Optimiser | backbone 4.0e-5, head 1.95e-3, wd 0.059, **effective batch 16** (1 × 16) | 3e-5, 1e-3, 0.02, batch 8 |
+| Inference | central **320 px crop** of 384 (no resize), **94 windows**, **mirror TTA** | 78 windows, full frame |
+
+Per the 746792 post, their **pre-OAI** all-data model was already 0.939–0.942, about +0.01 above ours. That gap
+comes from **labels, optimiser settings and the denser 96-slice native-384 cache**, all usable without OAI. This is
+the biggest actionable lever found.
+
+**Measured on our predictions:**
+- probability-space vs rank-space reduction within a family: no difference (gold 0.9080 vs 0.9078 Raptor,
+  0.9097 vs 0.9104 ConvNeXt; corr 0.997);
+- per-finding fusion weights: +0.0001 cross-validated.
+
+The 0.950 per-finding weights are commented with gold-58 AUCs, i.e. tuned on 58 studies.
+
+**Speed engineering worth copying** (for runtime and the efficiency track):
+- a multithreaded DICOM reader (16 header + 8 pixel threads per prep process);
+- uint8 windows built on the GPU through a 256-entry LUT;
+- backbone forward in chunks of 16 windows;
+- no DataParallel (it caused host-RAM OOM on the hidden test).
+
+**Not adopted:**
+- **OAI:** host rule "generally accessible to all participants"; participants in China cannot access it.
+- **nartaa's weights directly:** the public-stack question (S2 in STRATEGY_2026-10-09.md), a user decision.
+- **Gold-tuned per-finding weights.**
+
+## 7. Revised priority (supersedes section 3)
+1. **Raptor v2 all-data (EXP-064):** nartaa's non-OAI recipe on our pipeline.
+   - Optimiser: backbone 4e-5, head 2e-3, wd 0.06, effective batch 16 (batch 8 × accumulate 2).
+   - Labels: blend + JEV.
+   - Step A: on the existing 80-slice cache (no new cache).
+   - Step B: if it helps, a 96-slice native-384 cache (Kaggle CPU, ~45 GB in 5 parts) + 320 crop + 94 windows.
+   - This replaces the plain "2nd seed" idea.
+2. All-data reader (section 1).
+3. DINOv2-S / RadImageNet fold 0 (section 2).
+4. Mirror TTA for the Raptor members if runtime allows (5 folds + all-data at 2× is ~8 h, too slow; all-data only
+   is fine).
