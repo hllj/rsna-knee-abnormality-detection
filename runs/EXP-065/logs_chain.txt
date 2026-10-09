@@ -1,0 +1,7 @@
+cache_336_raptor studies: 4407 05:29
+raptor_v2_alldata: gold 0.91367 min 253.1 best-3 by gold [0.9048, 0.9046, 0.9046] 09:42
+raptor_v2_alldata UPLOADED (rsna-knee-raptor-v2) 09:42
+cache_384_d96 studies: 4407 09:59
+raptor_v2_d96_alldata: gold 0.91422 min 254.6 best-3 by gold [0.9077, 0.9076, 0.9068] 14:14
+raptor_v2_d96_alldata UPLOADED (rsna-knee-raptor-v2-d96) 14:14
+ITER08_DONE 14:14
