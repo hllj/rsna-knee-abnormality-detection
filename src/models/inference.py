@@ -251,11 +251,15 @@ def predict_batch(groups: Dict[tuple, List[Member]], stacks: List[dict], device,
 def run_stream(ids: List[str], dicom_dir: str, series: pd.DataFrame, ckpts: List[str], device, workers: int,
                opts: dict, batch: int = 8, log_every: int = 100, mirror: bool = False,
                mirror_families: Optional[List[str]] = None,
-               k_eval_override: Optional[Dict[str, int]] = None) -> Dict[str, np.ndarray]:
+               k_eval_override: Optional[Dict[str, int]] = None,
+               mirror_force: Optional[List[str]] = None) -> Dict[str, np.ndarray]:
     """All checkpoints' predictions (ckpt -> (N, 12), rows in `ids` order); with `mirror`, eligible checkpoints
     also get "<ckpt>#mirror" (anatomical-mirror pass). `mirror_families` (exp names) limits the mirror pass to those
     families: it doubles a member's GPU time, and EXP-071 (7 mirrored members) took ~8.75 h of the 9 h limit."""
     members = [Member(c, device) for c in ckpts]
+    if mirror_force:  # experiment only: mirror laterality-canonicalised families too (out-of-distribution input)
+        for m in members:
+            m.mirror_ok = m.mirror_ok or m.cfg.exp_name in mirror_force
     if mirror_families:
         for m in members:
             m.mirror_ok = m.mirror_ok and m.cfg.exp_name in mirror_families
@@ -353,8 +357,11 @@ def main():
     ap.add_argument("--save_raw", default=None, help="npz with ids + every checkpoint's plain / mirror predictions")
     ap.add_argument("--k_eval_override", default=None,
                     help='windows per study by family, e.g. "convnext_small_288_dense=0,coatnet2_384_dense=0" (0 = all)')
+    ap.add_argument("--mirror_force", default=None,
+                    help="comma-separated exp names to mirror even if laterality-canonicalised (experiments only)")
     a = ap.parse_args()
     mirror_families = [f for f in (a.mirror_families or "").split(",") if f]
+    mirror_force = [f for f in (a.mirror_force or "").split(",") if f]
     k_eval_override = {k: int(v) for k, v in (kv.split("=") for kv in (a.k_eval_override or "").split(",") if kv)}
 
     ckpts = sorted({p for pat in a.ckpts for p in glob.glob(pat, recursive=True)})
@@ -377,7 +384,7 @@ def main():
     if a.mode == "stream":
         by_ckpt = run_stream(ids, dicom_dir, series, ckpts, device, a.workers, opts, batch=a.batch,
                              mirror=a.mirror_tta or bool(mirror_families), mirror_families=mirror_families,
-                             k_eval_override=k_eval_override)
+                             k_eval_override=k_eval_override, mirror_force=mirror_force)
         if a.save_raw:
             np.savez(a.save_raw, ids=np.asarray(ids), **{k.replace("/", "__"): v for k, v in by_ckpt.items()})
             print(f"[infer] raw predictions -> {a.save_raw} ({len(by_ckpt)} arrays)")
