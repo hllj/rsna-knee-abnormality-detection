@@ -55,6 +55,13 @@ Sources: 147 discussion topics and about 60 pulled public notebooks, plus our go
   - Likely reason: our within-slot windows already sample 48 of ~76 positions evenly per slot, and adjacent windows
     overlap. Raptor's gain came from cross-slot windows over a 2–98 % span.
   - Not adopted: it would add ~60 % runtime for those families.
+- **Forced mirror TTA on the canonicalised families — NEGATIVE, as expected.** Run: gold-eval v3, `--mirror_force`.
+  - The mirror pass alone reads like an out-of-distribution input: CoAtNet f0 0.9088 → 0.8763, ConvNeXt dense
+    5f 0.9100 → 0.8892.
+  - Averaged with the plain pass it still loses: CoAtNet f0 0.9023 (−0.0065), ConvNeXt dense 5f 0.9062 (−0.0038).
+  - In the blends: EXP-075 0.9226 → 0.9219, EXP-076 0.9259 → 0.9234.
+  - Keep mirror off for every laterality-canonicalised model. Training on native-laterality data (EXP-080) is the
+    way to make ConvNeXt mirror-eligible.
 - Directions 2 (EXP-079) and 3 (EXP-080): fold 0 training on two 3090s since 14:34 / 14:41 UTC.
 
 Order: 1 is free and ready for tomorrow's exploration slot. 2 and 3 are one 3090 fold-0 run each (~2.5 h).
