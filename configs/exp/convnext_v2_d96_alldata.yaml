@@ -1,0 +1,59 @@
+# ITER-09 / EXP-073 — ConvNeXt-S on the 96-slice native-384 cache with the Raptor v2 recipe (nartaa non-OAI LRs, wd,
+# effective batch 16, OneCycle, gain-only aug, best-3-by-gold), all data. Same data and head as EXP-065, a different
+# backbone for blend diversity (ConvNeXt-S dense 5f was our strongest non-CoAtNet family, LB 0.930).
+exp_name: convnext_v2_d96_alldata
+paths:
+  cache_dir: ${paths.processed_data}/cache_384_d96
+preprocess:
+  res: 384                         # native 384: no 336 -> 384 upsampling
+  crop_mm: 140
+  span: [0.02, 0.98]
+  clip_percentiles: [2, 98]
+  canonical: false
+  slots:                           # fluid -1 = any series of the plane (not already used by an earlier slot)
+    sag_fluid: {plane: Sagittal, fluid: 1, n: 26}
+    sag_2nd: {plane: Sagittal, fluid: 0, n: 22}
+    cor_fluid: {plane: Coronal, fluid: 1, n: 18}
+    cor_2nd: {plane: Coronal, fluid: 0, n: 12}
+    axial: {plane: Axial, fluid: -1, n: 18}
+model:
+  backbone: convnext_small.fb_in22k_ft_in1k
+  img_size: 384
+  head: tanh_mil                   # LayerNorm -> Linear(F,256)-Tanh-Dropout(0.2)-Linear(256,12), softmax per finding
+  slot_embedding: false
+  drop_rate: 0.2                   # attention-head dropout (Raptor: Dropout 0.2 after Tanh)
+  drop_path_rate: 0.2              # ConvNeXt-S default in our dense runs (EXP-024/026)
+  grad_checkpointing: true
+  channels_last: true
+windows:
+  k_train: 12
+  k_eval: 0                        # 0 = every window position (94 for 96 slices): gold / test
+  k_val: 24                        # per-epoch validation (Raptor's trainer validates at k_eval 24)
+  sampling: uniform                # random centres (with replacement when k > available)
+  cross_slot: true                 # Raptor windows run over the concatenated stack
+augmentation:
+  preset: gain_only                # +-10% global intensity gain, nothing else
+  window_dropout: 0.0
+training:
+  batch_size: 8                    # effective batch 16 as nartaa (1 x 16); 8 x 2 keeps the GPU busy
+  accumulate_grad_batches: 2
+  num_epochs: 16
+  lr: 1.95e-3                      # head (nartaa)
+  backbone_lr_mult: 0.020564         # backbone 4.01e-5
+  weight_decay: 0.0588
+  schedule: onecycle
+  pct_start: 0.15
+  loss: bce_posweight              # pos_weight = clip((1-p)/p, 1, 10), p = label prevalence clipped [0.03, 0.7]
+  gradient_clip_val: 3.0
+  precision: bf16-mixed
+  ema: 0.0
+  top_k_average: 3
+  top_k_mode: best                 # nartaa: average the 3 epochs with the best gold-58 AUC (monitor = val_auc_gold)
+  val_every: 1
+labels:
+  sources:
+    - llm_labels_v4_blend.csv      # stevenleehans/rsna-knee-llm-report-labels
+    - llm_labels_full.csv          # stevenleehans/rsna-knee-llm-report-labels
+    - report_labels_v2.csv         # pilkwang/rsna-knee-llm-labels
+    - HYBRID_labels_scores.csv     # riadmohamed42/jev-knee-labels (JEV), CC0
+  weights: [1, 1, 1, 2]
