@@ -1,0 +1,70 @@
+# ITER-11 / EXP-081 "Raptor v3": the 96-slice Raptor v2 all-data recipe (EXP-065, LB 0.938 alone) as a pseudo-label
+# student. Targets = 0.5 x its own label blend (4 tables, JEV x2) + 0.5 x a multi-architecture teacher: the
+# rank-average of ConvNeXt dense 5f + Raptor repro 5f pooled OOF (report-label AUC 0.8853), quantile-mapped onto
+# this label blend on the box (scripts/make_pseudo_teacher.py --exp). Same data, model, schedule and best-3-by-gold
+# selection as EXP-065, so gold-58 is directly comparable (EXP-065 gold 0.9142; EXP-079 showed +0.008 OOF for
+# a ConvNeXt student). Gold studies get no teacher values (not in any OOF) and are only used for validation.
+exp_name: raptor_v3_d96_alldata_pl
+paths:
+  cache_dir: ${paths.processed_data}/cache_384_d96
+preprocess:
+  res: 384                         # native 384: no 336 -> 384 upsampling
+  crop_mm: 140
+  span: [0.02, 0.98]
+  clip_percentiles: [2, 98]
+  canonical: false
+  slots:                           # fluid -1 = any series of the plane (not already used by an earlier slot)
+    sag_fluid: {plane: Sagittal, fluid: 1, n: 26}
+    sag_2nd: {plane: Sagittal, fluid: 0, n: 22}
+    cor_fluid: {plane: Coronal, fluid: 1, n: 18}
+    cor_2nd: {plane: Coronal, fluid: 0, n: 12}
+    axial: {plane: Axial, fluid: -1, n: 18}
+model:
+  backbone: coatnet_rmlp_2_rw_384.sw_in12k_ft_in1k
+  img_size: 384
+  head: tanh_mil                   # LayerNorm -> Linear(F,256)-Tanh-Dropout(0.2)-Linear(256,12), softmax per finding
+  slot_embedding: false
+  drop_rate: 0.2                   # attention-head dropout (Raptor: Dropout 0.2 after Tanh)
+  drop_path_rate: 0.0
+  grad_checkpointing: true
+  channels_last: true
+windows:
+  k_train: 12
+  k_eval: 0                        # 0 = every window position (94 for 96 slices): gold / test
+  k_val: 24                        # per-epoch validation (Raptor's trainer validates at k_eval 24)
+  sampling: uniform                # random centres (with replacement when k > available)
+  cross_slot: true                 # Raptor windows run over the concatenated stack
+augmentation:
+  preset: gain_only                # +-10% global intensity gain, nothing else
+  window_dropout: 0.0
+training:
+  batch_size: 8                    # effective batch 16 as nartaa (1 x 16); 8 x 2 keeps the GPU busy
+  accumulate_grad_batches: 2
+  num_epochs: 16
+  lr: 1.95e-3                      # head (nartaa)
+  backbone_lr_mult: 0.020564         # backbone 4.01e-5
+  weight_decay: 0.0588
+  schedule: onecycle
+  pct_start: 0.15
+  loss: bce_posweight              # pos_weight = clip((1-p)/p, 1, 10), p = label prevalence clipped [0.03, 0.7]
+  gradient_clip_val: 3.0
+  precision: bf16-mixed
+  ema: 0.0
+  top_k_average: 3
+  top_k_mode: best                 # nartaa: average the 3 epochs with the best gold-58 AUC (monitor = val_auc_gold)
+  val_every: 1
+labels:
+  sources:
+    - llm_labels_v4_blend.csv      # stevenleehans/rsna-knee-llm-report-labels
+    - llm_labels_full.csv          # stevenleehans/rsna-knee-llm-report-labels
+    - report_labels_v2.csv         # pilkwang/rsna-knee-llm-labels
+    - HYBRID_labels_scores.csv     # riadmohamed42/jev-knee-labels (JEV), CC0
+  weights: [1, 1, 1, 2]
+  pseudo:
+    enabled: true
+    oof_files: [configs/teachers/cnx5_raptor5_qmap_jev.csv]   # built on the box by iter11_chain.sh
+    weight: 0.5
+    per_label_weight:              # explicit 0.5: an empty dict would merge with the defaults 0.7 / 0.6 / 0.6
+      Synovitis: 0.5
+      PF OA: 0.5
+      Lateral OA: 0.5
