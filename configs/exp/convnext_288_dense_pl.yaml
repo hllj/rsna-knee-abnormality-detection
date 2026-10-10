@@ -36,4 +36,7 @@ labels:
     enabled: true
     oof_files: [configs/teachers/raptor_repro5_qmap.csv]
     weight: 0.5
-    per_label_weight: {}           # plain 50/50 for every finding (goodpjw's mix)
+    per_label_weight:              # plain 50/50 for every finding (goodpjw's mix); explicit, since an empty dict
+      Synovitis: 0.5               # would merge with (not replace) the defaults 0.7 / 0.6 / 0.6
+      PF OA: 0.5
+      Lateral OA: 0.5
