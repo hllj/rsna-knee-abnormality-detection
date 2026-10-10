@@ -62,6 +62,13 @@ Sources: 147 discussion topics and about 60 pulled public notebooks, plus our go
   - In the blends: EXP-075 0.9226 → 0.9219, EXP-076 0.9259 → 0.9234.
   - Keep mirror off for every laterality-canonicalised model. Training on native-laterality data (EXP-080) is the
     way to make ConvNeXt mirror-eligible.
-- Directions 2 (EXP-079) and 3 (EXP-080): fold 0 training on two 3090s since 14:34 / 14:41 UTC.
+- **Direction 2 (EXP-079, pseudo-label student) — POSITIVE on CV.**
+  - Fold 0 OOF vs report labels: 0.8825, vs EXP-024 0.8745 (+0.008) and the teacher's architecture (Raptor f0) 0.8770.
+  - Gold 0.9044 vs 0.9037 (flat).
+  - LB check: EXP-078 (fold 0 alone) vs EXP-025 0.926, on 2026-10-11.
+  - If it gains, train folds 1-4 (~1.5 h each on a 3090).
+- **Direction 3 (EXP-080, ConvNeXt on the native 336 cache, our recipe) — NEGATIVE.**
+  - OOF 0.8644 (−0.010), gold 0.8897 (−0.014).
+  - With our recipe ConvNeXt prefers the canonicalised dense cache, so it stays mirror-ineligible.
 
 Order: 1 is free and ready for tomorrow's exploration slot. 2 and 3 are one 3090 fold-0 run each (~2.5 h).
