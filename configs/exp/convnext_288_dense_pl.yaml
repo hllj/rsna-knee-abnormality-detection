@@ -1,0 +1,39 @@
+# ITER-10 / EXP-079 (direction 2): ConvNeXt-S dense student trained on pseudo-labels from a teacher of a different
+# architecture. Identical to convnext_288_dense (EXP-024, fold 0 OOF 0.8745 / gold 0.9037) except the targets:
+#   y = 0.5 * report labels + 0.5 * Raptor repro 5-fold OOF (CoAtNet), quantile-mapped onto the label scale
+#   (configs/teachers/raptor_repro5_qmap.csv, scripts/make_pseudo_teacher.py).
+# goodpjw: a 50/50 label + held-out-prediction mix reads 0.921 vs 0.896 on gold as a label set, and a single model
+# went 0.922 -> 0.927 LB. Judge on gold-58 and the LB: OOF vs report labels is biased against a pseudo-label student.
+# The report-only ruler (models/oof/<exp>_report_targets.csv) is still written for OOF comparison.
+exp_name: convnext_small_288_dense_pl
+paths:
+  cache_dir: ${paths.processed_data}/cache_256_dense
+preprocess:
+  res: 256
+  slots:
+    sag_fs: {plane: Sagittal, fluid: 1, n: 26}
+    sag_t1: {plane: Sagittal, fluid: 0, n: 14}
+    cor_fs: {plane: Coronal, fluid: 1, n: 20}
+    cor_t1: {plane: Coronal, fluid: 0, n: 10}
+    ax_fs: {plane: Axial, fluid: 1, n: 14}
+    ax_t1: {plane: Axial, fluid: 0, n: 4}
+model:
+  backbone: convnext_small.fb_in22k_ft_in1k
+  img_size: 288
+  drop_path_rate: 0.2
+  channels_last: true
+windows:
+  k_train: 16
+  k_eval: 48
+training:
+  batch_size: 8
+  accumulate_grad_batches: 1
+  num_epochs: 15
+  lr: 5.0e-4
+  backbone_lr_mult: 0.1
+labels:
+  pseudo:
+    enabled: true
+    oof_files: [configs/teachers/raptor_repro5_qmap.csv]
+    weight: 0.5
+    per_label_weight: {}           # plain 50/50 for every finding (goodpjw's mix)

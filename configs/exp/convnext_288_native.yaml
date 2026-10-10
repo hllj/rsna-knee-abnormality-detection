@@ -1,0 +1,35 @@
+# ITER-10 / EXP-080 (direction 3): ConvNeXt-S with OUR recipe (EXP-024: lr 5e-4 / backbone x0.1, attn_mil + slot
+# embedding, our augmentations, our labels) on the Raptor native-resolution cache: 80 slices stored at 336 px (no
+# 256 -> 288 upsampling), 2-98 % span, 2-98 percentile window, NOT laterality-canonicalised (mirror-TTA eligible).
+# Only the data changes vs EXP-024 (fold 0 OOF 0.8745 / gold 0.9037). EXP-073 changed data, LRs and head together
+# and read gold 0.897. k_eval stays 48 so the fold-0 OOF is comparable; all-window scoring is tested separately at
+# inference (--k_eval_override, direction 1).
+exp_name: convnext_small_288_native
+paths:
+  cache_dir: ${paths.processed_data}/cache_336_raptor
+preprocess:
+  res: 336
+  crop_mm: 140
+  span: [0.02, 0.98]
+  clip_percentiles: [2, 98]
+  canonical: false
+  slots:                           # = raptor_repro (fluid -1 = any series of the plane not used by an earlier slot)
+    sag_fluid: {plane: Sagittal, fluid: 1, n: 22}
+    sag_2nd: {plane: Sagittal, fluid: 0, n: 18}
+    cor_fluid: {plane: Coronal, fluid: 1, n: 15}
+    cor_2nd: {plane: Coronal, fluid: -1, n: 10}
+    axial: {plane: Axial, fluid: -1, n: 15}
+model:
+  backbone: convnext_small.fb_in22k_ft_in1k
+  img_size: 288                    # downsampled from the native 336 store: same compute as EXP-024
+  drop_path_rate: 0.2
+  channels_last: true
+windows:
+  k_train: 16
+  k_eval: 48
+training:
+  batch_size: 8
+  accumulate_grad_batches: 1
+  num_epochs: 15
+  lr: 5.0e-4
+  backbone_lr_mult: 0.1
