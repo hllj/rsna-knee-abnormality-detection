@@ -41,7 +41,7 @@ same 58 studies, so that is inflated.
 | # | Local | EXP | Notebook | What | Gold-58 | Question |
 |---|---|---|---|---|---|---|
 | 1 | 07:05 | EXP-074 | v41 | 96-slice seeds 1+2 averaged, mirror | 0.9206 | Does a 2nd seed beat 0.938? |
-| 2 | 07:06 | EXP-075 | v42 | EXP-071 recipe + seed 2: EXP-055 families ×0.6 + seeds ×0.4, mirror on seeds only | 0.9219 | Prior-weighted best: > 0.940? |
+| 2 | 07:06 | EXP-075 | v44 | EXP-071 recipe + seed 2: EXP-055 families ×0.6 + seeds ×0.4, mirror on seeds + reader | 0.9226 | Prior-weighted best: > 0.940? |
 | 3 | 07:07 | EXP-076 | v43 | **Gold-58-picked:** seeds 0.5 + reader v1 0.2 + CoAtNet f0 0.2 + ConvNeXt 5f 0.1 | **0.9259** | Does gold-58 weight tuning transfer to the LB? |
 | 4 | after 2/3 score | EXP-077 | tbd | **OAI:** nartaa 0.8 + winner of EXP-075/076 0.2, per-finding rank fusion | — | Fallback pick: > 0.949? |
 | 5 | after 2/3 score | EXP-078 | tbd | Exploration, chosen by results: heavier seeds (0.6) if EXP-074 ≥ 0.940, or the runner-up weights | — | |
@@ -61,3 +61,14 @@ same 58 studies, so that is inflated.
    ConvNeXt on this recipe is weak (gold 0.897); do not repeat.
 3. Final picks: #1 = best rule-safe LB blend; #2 = nartaa-based OAI blend if the host allows OAI (743416),
    otherwise the second-best rule-safe blend from a different family mix.
+
+## Mirror TTA: which models (gold-58, `gold_mirror.py`)
+- Mirror improved every eligible family (9/9): Raptor repro 5f +0.0032, 96-slice seed 2 +0.0028, reader v3 +0.0023,
+  Raptor v1 all-data +0.0014, Raptor v2 80-slice +0.0012, reader v1 +0.0009, ConvNeXt-96 +0.0009, 96-slice seed 1 +0.0006.
+- Not eligible: ConvNeXt dense 5f and CoAtNet dense f0. They were trained on laterality-canonicalised inputs, so a
+  mirrored knee is out of distribution.
+- Effect in the blends:
+  - EXP-075: none 0.9218, seeds 0.9219, **seeds + reader 0.9226**, seeds + repro5 0.9222, all eligible 0.9226.
+  - EXP-076: none 0.9243, seeds 0.9253, **seeds + reader 0.9259**.
+- **Rule:** mirror the 96-slice seeds and the reader only. Raptor repro 5f costs 5 extra passes for no blend gain;
+  it is what pushed EXP-071 to ~8.75 h of the 9 h limit. EXP-075 was rebuilt as v44 with this rule.
