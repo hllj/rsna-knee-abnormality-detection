@@ -72,3 +72,10 @@ same 58 studies, so that is inflated.
   - EXP-076: none 0.9243, seeds 0.9253, **seeds + reader 0.9259**.
 - **Rule:** mirror the 96-slice seeds and the reader only. Raptor repro 5f costs 5 extra passes for no blend gain;
   it is what pushed EXP-071 to ~8.75 h of the 9 h limit. EXP-075 was rebuilt as v44 with this rule.
+- Full grid with all 9 families, mirror ON vs OFF (`gold_grid_mirror.py`): best ON 0.9259 vs OFF 0.9246 (+0.0013).
+  The top blend with every family mirrored is still EXP-076's formula. Adding mirrored reader v3 / Raptor v2 80 /
+  Raptor v1 / ConvNeXt-96 does not beat it, so there is no further mirror gain available.
+- nartaa (746792): their 0.949 already averages plain + anatomical mirror (+0.001 public: 0.948 → 0.949); the 320 px
+  crop at inference gave 0.000. Their non-OAI recipe (96 slices, label blend + JEV) scored **0.942** without mirror,
+  vs our replica EXP-068 0.938 with mirror. That 0.004 gap is a lead for the next training iteration
+  (labels / training details).
