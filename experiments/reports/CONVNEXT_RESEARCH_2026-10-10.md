@@ -47,4 +47,14 @@ Sources: 147 discussion topics and about 60 pulled public notebooks, plus our go
    Lower prior, more runs.
 6. **A different family for diversity**: DINOv2-S fold 0 (ITER-08 EXP-062, not run yet). Others report 0.937–0.942 with DINOv2.
 
+## Results
+- **Direction 1 (all windows at inference) — NEGATIVE.** Run: gold-eval v2, `--k_eval_override`, 58 gold studies.
+  - Predictions changed (mean |Δp| 0.011–0.018, corr 0.995–0.998), but gold AUC did not:
+    CoAtNet f0 0.9088 → 0.9088, ConvNeXt dense 5f 0.9100 → 0.9101.
+  - In the blends: EXP-075 0.9226 → 0.9220, EXP-076 0.9259 → 0.9254.
+  - Likely reason: our within-slot windows already sample 48 of ~76 positions evenly per slot, and adjacent windows
+    overlap. Raptor's gain came from cross-slot windows over a 2–98 % span.
+  - Not adopted: it would add ~60 % runtime for those families.
+- Directions 2 (EXP-079) and 3 (EXP-080): fold 0 training on two 3090s since 14:34 / 14:41 UTC.
+
 Order: 1 is free and ready for tomorrow's exploration slot. 2 and 3 are one 3090 fold-0 run each (~2.5 h).
