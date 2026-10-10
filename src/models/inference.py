@@ -249,10 +249,15 @@ def predict_batch(groups: Dict[tuple, List[Member]], stacks: List[dict], device,
 
 
 def run_stream(ids: List[str], dicom_dir: str, series: pd.DataFrame, ckpts: List[str], device, workers: int,
-               opts: dict, batch: int = 8, log_every: int = 100, mirror: bool = False) -> Dict[str, np.ndarray]:
+               opts: dict, batch: int = 8, log_every: int = 100, mirror: bool = False,
+               mirror_families: Optional[List[str]] = None) -> Dict[str, np.ndarray]:
     """All checkpoints' predictions (ckpt -> (N, 12), rows in `ids` order); with `mirror`, eligible checkpoints
-    also get "<ckpt>#mirror" (anatomical-mirror pass)."""
+    also get "<ckpt>#mirror" (anatomical-mirror pass). `mirror_families` (exp names) limits the mirror pass to those
+    families: it doubles a member's GPU time, and EXP-071 (7 mirrored members) took ~8.75 h of the 9 h limit."""
     members = [Member(c, device) for c in ckpts]
+    if mirror_families:
+        for m in members:
+            m.mirror_ok = m.mirror_ok and m.cfg.exp_name in mirror_families
     by_pp: Dict[str, List[Member]] = {}
     for m in members:
         by_pp.setdefault(pp_key(m.pp), []).append(m)
@@ -334,8 +339,11 @@ def main():
                     help="with --split train: score fold k of configs/folds_5.csv + the gold studies (fold -1)")
     ap.add_argument("--mirror_tta", action="store_true",
                     help="average eligible models (no laterality canonicalisation) with an anatomical-mirror pass")
+    ap.add_argument("--mirror_families", default=None,
+                    help="comma-separated exp names: mirror only these families (implies --mirror_tta)")
     ap.add_argument("--save_raw", default=None, help="npz with ids + every checkpoint's plain / mirror predictions")
     a = ap.parse_args()
+    mirror_families = [f for f in (a.mirror_families or "").split(",") if f]
 
     ckpts = sorted({p for pat in a.ckpts for p in glob.glob(pat, recursive=True)})
     assert ckpts, f"no checkpoints match {a.ckpts}"
@@ -356,7 +364,7 @@ def main():
 
     if a.mode == "stream":
         by_ckpt = run_stream(ids, dicom_dir, series, ckpts, device, a.workers, opts, batch=a.batch,
-                             mirror=a.mirror_tta)
+                             mirror=a.mirror_tta or bool(mirror_families), mirror_families=mirror_families)
         if a.save_raw:
             np.savez(a.save_raw, ids=np.asarray(ids), **{k.replace("/", "__"): v for k, v in by_ckpt.items()})
             print(f"[infer] raw predictions -> {a.save_raw} ({len(by_ckpt)} arrays)")
