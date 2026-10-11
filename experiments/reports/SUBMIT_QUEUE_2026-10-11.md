@@ -40,7 +40,7 @@ same 58 studies, so that is inflated.
 ## Queue
 | # | Local | EXP | Notebook | What | Gold-58 | Question |
 |---|---|---|---|---|---|---|
-| 1 | 07:05 | EXP-074 | v41 | 96-slice seeds 1+2 averaged, mirror | 0.9206 | Does a 2nd seed beat 0.938? |
+| 1 | 07:05 ✓ submitted | EXP-074 | v41 | 96-slice seeds 1+2 averaged, mirror | 0.9206 | Does a 2nd seed beat 0.938? |
 | 2 | 07:06 | EXP-075 | v44 | EXP-071 recipe + seed 2: EXP-055 families ×0.6 + seeds ×0.4, mirror on seeds + reader | 0.9226 | Prior-weighted best: > 0.940? |
 | 3 | 07:07 | EXP-076 | v43 | **Gold-58-picked:** seeds 0.5 + reader v1 0.2 + CoAtNet f0 0.2 + ConvNeXt 5f 0.1 | **0.9259** | Does gold-58 weight tuning transfer to the LB? |
 | 4 | after 2/3 score | EXP-077 | tbd | **OAI:** nartaa 0.8 + winner of EXP-075/076 0.2, per-finding rank fusion | — | Fallback pick: > 0.949? |
