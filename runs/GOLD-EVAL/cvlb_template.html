@@ -1,0 +1,201 @@
+<title>Gold-58 Calibration</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#F4F6F5; --panel:#FFFFFF; --ink:#17201D; --muted:#5B6863; --faint:#8C9994; --grid:#DCE3E0; --rule:#C9D3CF;
+  --accent:#0E7A6E; --band:rgba(14,122,110,.10);
+  --single:#2F6FDB; --five:#7A4BD6; --blend:#C27317; --all:#0E8C7E; --pos:#0E8C7E; --neg:#C2412D;
+  --sans:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --cond:"IBM Plex Sans Condensed","Arial Narrow",ui-sans-serif,system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0F1513; --panel:#161E1B; --ink:#E4EBE8; --muted:#97A6A0; --faint:#6F7D78; --grid:#26312D; --rule:#33403B;
+    --accent:#3CC2B0; --band:rgba(60,194,176,.13);
+    --single:#6E9CF0; --five:#A788EE; --blend:#E1A04A; --all:#3CC2B0; --pos:#3CC2B0; --neg:#EF7A66;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0F1513; --panel:#161E1B; --ink:#E4EBE8; --muted:#97A6A0; --faint:#6F7D78; --grid:#26312D; --rule:#33403B;
+  --accent:#3CC2B0; --band:rgba(60,194,176,.13);
+  --single:#6E9CF0; --five:#A788EE; --blend:#E1A04A; --all:#3CC2B0; --pos:#3CC2B0; --neg:#EF7A66;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--sans);margin:0}
+.wrap{max-width:1040px;margin:0 auto;padding-inline:20px;padding-block:28px 64px}
+header{display:grid;gap:6px;padding-bottom:22px;border-bottom:1px solid var(--rule)}
+.eyebrow{font:500 12px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+h1{font:700 clamp(28px,4.4vw,42px)/1.05 var(--cond);margin:4px 0 2px;text-wrap:balance;letter-spacing:-.01em}
+.lede{max-width:68ch;color:var(--muted);margin:0}
+h2{font:600 22px/1.2 var(--cond);margin:0;text-wrap:balance}
+h3{font:600 15px/1.3 var(--sans);margin:0}
+section{display:grid;gap:14px;padding-top:34px}
+p{margin:0;max-width:72ch}
+.muted{color:var(--muted)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;padding-top:22px}
+.kpi{background:var(--panel);border:1px solid var(--rule);border-radius:6px;padding:14px 16px;display:grid;gap:4px;align-content:start}
+.kpi .v{font:600 30px/1 var(--mono);font-variant-numeric:tabular-nums}
+.kpi .k{font:500 12px/1.3 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.kpi .s{font-size:13px;color:var(--muted);line-height:1.45}
+.panel{background:var(--panel);border:1px solid var(--rule);border-radius:6px;padding:16px;display:grid;gap:10px}
+.chart{overflow-x:auto}
+.chart svg{display:block;width:100%;min-width:560px;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--muted)}
+.leg{display:inline-flex;align-items:center;gap:7px}
+.chip{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:7px;vertical-align:-1px}
+.leg .chip{margin-right:0}
+.chip.g-single{background:var(--single)} .chip.g-five{background:var(--five)} .chip.g-blend{background:var(--blend)}
+.chip.g-all{background:var(--all)} .chip.g-ex{background:var(--faint)}
+.chip.ring{background:transparent;border:2px solid var(--blend)}
+svg .grid{stroke:var(--grid);stroke-width:1}
+svg .zero{stroke:var(--muted);stroke-width:1.2}
+svg .tick{fill:var(--muted);font:11px var(--mono)}
+svg .xlab{fill:var(--muted);font:10px var(--mono)}
+svg .axlab{fill:var(--muted);font:12px var(--sans)}
+svg .plab{fill:var(--ink);font:500 11px var(--mono)}
+svg .rlab{fill:var(--ink);font:12px var(--sans)}
+svg .rval{fill:var(--muted);font:11px var(--mono)}
+svg .fit{stroke:var(--accent);stroke-width:2;stroke-dasharray:6 4;fill:none}
+svg .band{fill:var(--band);stroke:none}
+svg .pair{stroke:var(--faint);stroke-width:1;stroke-dasharray:3 3;fill:none}
+svg .best{stroke:var(--accent);stroke-width:2;fill:none}
+svg .pt{stroke:var(--panel);stroke-width:1.5}
+svg .pt.g-single{fill:var(--single)} svg .pt.g-five{fill:var(--five)} svg .pt.g-blend{fill:var(--blend)} svg .pt.g-all{fill:var(--all)}
+svg .pt.g-f0{fill:var(--single)} svg .pt.g-f1{fill:var(--panel);stroke:var(--blend);stroke-width:2.2}
+svg .bar.g-single{fill:var(--single)} svg .bar.g-five{fill:var(--five)} svg .bar.g-blend{fill:var(--blend)} svg .bar.g-all{fill:var(--all)}
+.findings{display:grid;gap:12px;counter-reset:f}
+.finding{display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:start}
+.finding::before{counter-increment:f;content:counter(f);font:600 13px/26px var(--mono);text-align:center;width:26px;height:26px;border-radius:50%;background:var(--band);color:var(--accent)}
+.finding div{display:grid;gap:3px}
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.rule{background:var(--panel);border:1px solid var(--rule);border-radius:6px;padding:14px 16px;display:grid;gap:6px;align-content:start}
+.rule .tag{font:500 11px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.tablewrap{overflow-x:auto;border:1px solid var(--rule);border-radius:6px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:13.5px}
+th,td{padding:7px 12px;border-bottom:1px solid var(--grid);text-align:left;white-space:nowrap}
+th{font:500 11px/1.2 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--bg)}
+td.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+td.r,th.r{text-align:right}
+tr.muted-row td{color:var(--faint)}
+tr:last-child td{border-bottom:none}
+.note{font-size:13px;color:var(--muted)}
+code{font:13px var(--mono)}
+@media (max-width:560px){ .kpi .v{font-size:26px} .wrap{padding-inline:16px} }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">RSNA Knee 2026 · validation report · 2026-10-11</span>
+    <h1>Gold-58 Calibration</h1>
+    <p class="lede">How well our two local scores, out-of-fold CV on report labels and AUC on the 58 radiologist-labelled
+      gold studies, predict the public leaderboard. Covers all {{N_ALL}} usable experiments from the EfficientNet baseline to the
+      96-slice Raptor v2 seeds, with every blend re-scored on gold through the same rank pipeline as the submissions.</p>
+  </header>
+
+  <div class="kpis">
+    <div class="kpi"><span class="k">Gold-58 → LB</span><span class="v">r {{G_P}}</span>
+      <span class="s">{{G_N}} competitive experiments (LB ≥ 0.925); Spearman {{G_S}}; typical error ±{{G_RMSE}}</span></div>
+    <div class="kpi"><span class="k">Fold-0 OOF → LB</span><span class="v">r {{O0_P}}</span>
+      <span class="s">{{O0_N}} single fold-0 models; slope {{O0_SLOPE}}, so LB ≈ OOF + 0.05</span></div>
+    <div class="kpi"><span class="k">OOF across folds → LB</span><span class="v">r {{OA_P}}</span>
+      <span class="s">{{OA_N}} experiments with an OOF; mixing folds and pooled 5-fold OOFs blurs it</span></div>
+    <div class="kpi"><span class="k">Gold-58 ↔ OOF</span><span class="v">r {{GO_P}}</span>
+      <span class="s">{{GO_N}} experiments; the two local scores mostly measure different things</span></div>
+  </div>
+
+  <section>
+    <h2>Gold-58 predicts the leaderboard well once every blend is scored the same way</h2>
+    <p>On the competitive range the fit is <code>LB ≈ {{G_SLOPE}} × gold + {{G_ICPT}}</code>. LB sits {{OFF_M}} above gold on average
+      (sd {{OFF_SD}}). The shaded band is ±1 typical error, about two leaderboard ticks. Across all {{N_ALL}} experiments the
+      correlation is {{GA_P}}. Hover a point for its numbers.</p>
+    <div class="panel">
+      <div class="legend">{{LEGEND}}<span class="leg"><svg width="26" height="10" aria-hidden="true"><line x1="0" y1="5" x2="26" y2="5" class="fit"/></svg>fit on LB ≥ 0.925</span></div>
+      <div class="chart">{{CHART1}}</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Where gold-58 misjudges: residual by experiment</h2>
+    <p>Bars show how far each experiment's LB landed above (right) or below (left) the score its gold-58 predicts.
+      Raptor-family CoAtNets beat their gold; the reader and CoAtNet-dense fold 0 fall short of it.</p>
+    <div class="panel"><div class="chart">{{CHART2}}</div></div>
+  </section>
+
+  <section>
+    <h2>OOF predicts the leaderboard only within one fold</h2>
+    <p>Filled points are fold-0 models, rings are fold-1 models; dashed connectors join the same recipe on the two folds.
+      Fold 1 reads 0.010–0.012 higher OOF for the same or a lower LB, so OOF values from different folds cannot be compared.</p>
+    <div class="panel">
+      <div class="legend"><span class="leg"><span class="chip g-single"></span>Fold 0</span><span class="leg"><span class="chip ring"></span>Fold 1</span>
+        <span class="leg"><svg width="26" height="10" aria-hidden="true"><line x1="0" y1="5" x2="26" y2="5" class="fit"/></svg>fit on fold 0</span></div>
+      <div class="chart">{{CHART3}}</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>What the numbers say</h2>
+    <div class="findings">
+      <div class="finding"><div><h3>Gold-58 is our best single predictor of the LB</h3>
+        <p class="muted">With all blends re-scored on gold through the submission pipeline, gold explains most of the LB spread
+        (r {{G_P}}, typical error ±{{G_RMSE}}). The earlier estimate of r 0.74 mixed gold numbers from different scoring paths.</p></div></div>
+      <div class="finding"><div><h3>The error is systematic by model family, not random</h3>
+        <p class="muted">The 96-slice Raptor v2 models land +0.003 to +0.004 above the line (EXP-068, EXP-074), as does Raptor repro
+        fold 0 (EXP-045). The readers (EXP-046, EXP-056) and CoAtNet-dense fold 0 (EXP-040) land 0.005–0.008 below it. Gold
+        underrates the Raptor family and overrates the readers. Compare candidates within a family, or add the family offset.</p></div></div>
+      <div class="finding"><div><h3>Tuning weights on gold overfits it</h3>
+        <p class="muted">EXP-076 has the highest gold of any submission (0.9259) because its weights were chosen on those 58 studies,
+        yet it scored 0.940, below the plain two-seed average EXP-074 (0.941). Its residual is negative while EXP-074's is +0.003.</p></div></div>
+      <div class="finding"><div><h3>OOF is a reliable ruler inside one fold</h3>
+        <p class="muted">Fold-0 OOF tracks the LB with r {{O0_P}} and a slope near 1. Fold 1 is an easier fold: EXP-008, EXP-021 and
+        EXP-029 read about 0.010–0.012 higher OOF than their fold-0 twins for the same or a lower LB.</p></div></div>
+      <div class="finding"><div><h3>The two local scores see different things</h3>
+        <p class="muted">Gold and OOF correlate only r {{GO_P}}. The pseudo-label ConvNeXt (EXP-078) shows why. Its OOF rose +0.008
+        on report labels and its gold barely moved (+0.0007), yet the LB rose +0.003. The LB sided with OOF here, and with gold
+        for the family offsets above.</p></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>How to use each score from here</h2>
+    <div class="rules">
+      <div class="rule"><span class="tag">Recipe or architecture change</span>
+        <p>Train fold 0 and compare fold-0 OOF on report labels (gate −0.003), then check gold has not dropped by more than ~0.01.
+        Never compare OOF across folds.</p></div>
+      <div class="rule"><span class="tag">All-data models</span>
+        <p>Gold is the only local signal and is optimistic when it also picked the epochs. Compare against the same family's gold,
+        not across families, and confirm on the LB.</p></div>
+      <div class="rule"><span class="tag">Blend weights and members</span>
+        <p>Do not tune weights on gold. Use prior weights and let the LB decide; a predicted gain below ~0.002 is inside the
+        noise and not worth a submission on its own.</p></div>
+      <div class="rule"><span class="tag">Reading a gold gap</span>
+        <p>One gold point ≈ {{G_SLOPE}} LB points. A 0.004 gold gain predicts only ~+0.0025 LB, about one tick, before the
+        family offset.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Leaderboard progress</h2>
+    <p>Every usable submission in order, with the best score so far. Points use the same colours as the first chart.</p>
+    <div class="panel"><div class="chart">{{CHART4}}</div></div>
+  </section>
+
+  <section>
+    <h2>All experiments</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>EXP</th><th>Model</th><th>Group</th><th class="r">OOF</th><th class="r">Gold-58</th><th class="r">LB</th><th class="r">LB − gold fit</th></tr></thead>
+        <tbody>
+{{TABLE}}
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Excluded from the fits (grey rows): EXP-000 (dry run on 600 studies), EXP-012 (duplicate of EXP-009),
+      EXP-017 (scored on stale weights) and EXP-069 (OAI-trained third-party model, no gold score). OOF is fold-0 or
+      fold-1 for single-fold models and pooled 5-fold for ensembles. Gold for blends from the gold-eval re-scoring
+      (<code>runs/GOLD-EVAL/</code>); single models from their training logs. EXP-078's numbers are EXP-079's training run.</p>
+  </section>
+</div>
