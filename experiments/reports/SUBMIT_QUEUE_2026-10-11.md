@@ -41,10 +41,10 @@ same 58 studies, so that is inflated.
 | # | Local | EXP | Notebook | What | Gold-58 | Question |
 |---|---|---|---|---|---|---|
 | 1 | 07:05 ✓ submitted | EXP-074 | v41 | 96-slice seeds 1+2 averaged, mirror | 0.9206 | Does a 2nd seed beat 0.938? |
-| 2 | 07:06 | EXP-075 | v44 | EXP-071 recipe + seed 2: EXP-055 families ×0.6 + seeds ×0.4, mirror on seeds + reader | 0.9226 | Prior-weighted best: > 0.940? |
-| 3 | 07:07 | EXP-076 | v43 | **Gold-58-picked:** seeds 0.5 + reader v1 0.2 + CoAtNet f0 0.2 + ConvNeXt 5f 0.1 | **0.9259** | Does gold-58 weight tuning transfer to the LB? |
+| 2 | 07:06 ✓ submitted | EXP-075 | v44 | EXP-071 recipe + seed 2: EXP-055 families ×0.6 + seeds ×0.4, mirror on seeds + reader | 0.9226 | Prior-weighted best: > 0.940? |
+| 3 | 07:07 ✓ submitted | EXP-076 | v43 | **Gold-58-picked:** seeds 0.5 + reader v1 0.2 + CoAtNet f0 0.2 + ConvNeXt 5f 0.1 | **0.9259** | Does gold-58 weight tuning transfer to the LB? |
 | 4 | after 2/3 score | EXP-077 | tbd | **OAI:** nartaa 0.8 + winner of EXP-075/076 0.2, per-finding rank fusion | — | Fallback pick: > 0.949? |
-| 5 | 07:08 | EXP-078 | v45 | **Pseudo-label ConvNeXt student fold 0 alone** (EXP-079: OOF 0.8825 vs 0.8745, gold 0.9044) | 0.9044 | Do pseudo-label CV gains reach the LB? vs EXP-025 0.926 |
+| 5 | 07:08 ✓ submitted | EXP-078 | v45 | **Pseudo-label ConvNeXt student fold 0 alone** (EXP-079: OOF 0.8825 vs 0.8745, gold 0.9044) | 0.9044 | Do pseudo-label CV gains reach the LB? vs EXP-025 0.926 |
 
 - EXP-069 showed that our blend at 35% *lowers* nartaa (0.949 → 0.948), hence 0.2 for ours.
 - Runtime: EXP-071 (7 mirrored members) took ~8.75 h of the 9 h limit. Mirror is now limited to the strongest
