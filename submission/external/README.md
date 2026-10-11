@@ -13,3 +13,7 @@
 Required acknowledgement (OAI): Data and/or research tools used in the preparation of this work were obtained and
 analyzed from the controlled access datasets distributed from the Osteoarthritis Initiative (OAI), a data repository
 housed within the NIMH Data Archive (NDA). Dataset identifier(s): 10.15154/0hcg-f676.
+
+## Second external stage: nartaa's 0.945 224-crop model (ITER-12)
+- `nartaa_0945_inference.py`: **verbatim** scored pipeline cell of https://www.kaggle.com/code/nartaa/rsna-knee-0945-efficient-224crop (same author, same weights dataset, checkpoint `raptor_ft_alldata_t16_blendjev_oai_d96_c08_r224_swa.pt`). `nartaa_0945_check.py`: its checkpoint check. Not modified.
+- OAI status: allowed per the host ruling in discussion 741819 (2026-09-21) for data accessible without institutional sign-off; NDA lists OAI as institutional approval not required.

@@ -364,7 +364,7 @@ print(EXP)'''),
 
 
 def nb_inference(weights: str = None, family_weights: str = None, infer_args: str = None,
-                 ext_weight: float = None):
+                 ext_weight: float = None, ext_weight_map: dict = None, ext224: float = None):
     srcs = ", ".join(f"`{USER}/rsna-knee-{s}` ({EXPERIMENTS[s]['id']})" for s in EXPERIMENTS["inference"]["sources"])
     if weights:
         srcs = f"the weights dataset `{weights}` (uploaded by `scripts/vast/submit.sh`)"
@@ -374,7 +374,9 @@ def nb_inference(weights: str = None, family_weights: str = None, infer_args: st
                       "through exactly the same preprocessing as training (`src/dataset/dicom.py`); each model's "
                       "predictions are converted to per-finding ranks (AUC only depends on order) and averaged.")),
         ("code", exp_json("inference") + f"\nFAMILY_WEIGHTS = {family_weights!r}\nINFER_ARGS = {(infer_args or '').split()!r}\n"
-         f"EXT_WEIGHT = {ext_weight!r}   # rank weight of the external nartaa 0.949 stage (None = off)\n" + FIND),
+         f"EXT_WEIGHT = {ext_weight!r}   # rank weight of the external nartaa 0.949 stage (None = off)\n"
+         f"EXT_MAP = {ext_weight_map or {}!r}   # per-finding override of EXT_WEIGHT (finding-group routing)\n"
+         f"EXT224 = {ext224!r}   # share of nartaa's 0.945 224-crop model inside the external anchor (None = off)\n" + FIND),
         ("md", "## 1. Offline dependencies and checkpoints\nThe pylibjpeg wheels come from a training notebook's "
                "output (needed for JPEG-compressed DICOMs)."),
         ("code", '''WHEELS = walk_find(lambda d, f: d if any(x.startswith("pylibjpeg") and x.endswith(".whl") for x in f) else None)
@@ -400,6 +402,10 @@ t_ext = time.time()
 subprocess.run([sys.executable, f"{CODE}/submission/external/nartaa_0949_check.py"], check=True)
 subprocess.run([sys.executable, f"{CODE}/submission/external/nartaa_0949_inference.py"], check=True, cwd="/kaggle/working")
 shutil.move("/kaggle/working/submission.csv", "/kaggle/working/ext_nartaa.csv")
+if EXT224:  # second view of the anchor: nartaa's 224-crop efficiency checkpoint (verbatim scored source)
+    subprocess.run([sys.executable, f"{CODE}/submission/external/nartaa_0945_check.py"], check=True)
+    subprocess.run([sys.executable, f"{CODE}/submission/external/nartaa_0945_inference.py"], check=True, cwd="/kaggle/working")
+    shutil.move("/kaggle/working/submission.csv", "/kaggle/working/ext_nartaa224.csv")
 EXT_SECONDS = round(time.time() - t_ext)
 print(f"external stage {EXT_SECONDS}s")''')] if ext_weight else []),
         ("md", "## 2. Predict and rank-average"),
@@ -416,11 +422,17 @@ ours = pd.read_csv("/kaggle/working/submission.csv", dtype={"StudyInstanceUID": 
 ext = pd.read_csv("/kaggle/working/ext_nartaa.csv", dtype={"StudyInstanceUID": str}).set_index("StudyInstanceUID")
 assert set(ours.index) == set(ext.index), "external and our predictions cover different studies"
 ext = ext.loc[ours.index, ours.columns]
-fused = EXT_WEIGHT * ext.rank(pct=True) + (1 - EXT_WEIGHT) * ours.rank(pct=True)
+anchor = ext.rank(pct=True)
+if EXT224:
+    e224 = pd.read_csv("/kaggle/working/ext_nartaa224.csv", dtype={"StudyInstanceUID": str}).set_index("StudyInstanceUID")
+    assert set(e224.index) == set(ours.index), "224-crop predictions cover different studies"
+    anchor = (1 - EXT224) * anchor + EXT224 * e224.loc[ours.index, ours.columns].rank(pct=True)
+w = pd.Series({c: float(EXT_MAP.get(c, EXT_WEIGHT)) for c in ours.columns})   # nartaa share per finding
+fused = anchor.mul(w, axis=1) + ours.rank(pct=True).mul(1 - w, axis=1)
 fused = fused.rank(pct=True)
 assert fused.notna().all().all()
 fused.reset_index().to_csv("/kaggle/working/submission.csv", index=False)
-print("fused", fused.shape, "| ext weight", EXT_WEIGHT)''')] if ext_weight else []),
+print("fused", fused.shape, "| ext weight per finding", w.round(3).to_dict(), "| ext224", EXT224)''')] if ext_weight else []),
         ("code", '''import numpy as np, pandas as pd
 sub = pd.read_csv("/kaggle/working/submission.csv")
 files = glob.glob("/tmp/knee_cache/*/*.npz")   # only written in --mode cache (stream keeps stacks in memory)
@@ -608,6 +620,10 @@ if __name__ == "__main__":
     ap.add_argument("--family-weights", default=None, help='e.g. "convnext_small_288=0.7,effnet_b0_224=0.3"')
     ap.add_argument("--ext-weight", type=float, default=None,
                     help="add the external nartaa 0.949 stage (submission/external) with this rank weight")
+    ap.add_argument("--ext-weight-map", default=None,
+                    help='per-finding external weight, e.g. "Lateral OA=0.6,PF OA=0.6" (others use --ext-weight)')
+    ap.add_argument("--ext224", type=float, default=None,
+                    help="share of nartaa's 0.945 224-crop model inside the external anchor (second external stage)")
     ap.add_argument("--infer-args", default=None,
                     help='extra src/models/inference.py args, e.g. "--split train --limit 64" (debug a failed hidden run)')
     args = ap.parse_args()
@@ -648,7 +664,10 @@ if __name__ == "__main__":
         meta["model_sources"] = list(args.model_sources)
         write("inference", nb_inference(weights="Kaggle Models: " + ", ".join(sorted({m.split("/")[1] for m in args.model_sources})),
                                         family_weights=args.family_weights, infer_args=args.infer_args,
-                                        ext_weight=args.ext_weight), meta)
+                                        ext_weight=args.ext_weight,
+                                        ext_weight_map={k.strip(): float(v) for k, v in (kv.split("=") for kv in
+                                                        (args.ext_weight_map or "").split(",") if kv)},
+                                        ext224=args.ext224), meta)
     elif args.weights_dataset:
         EXPERIMENTS["inference"]["sources"] = []
         write("inference", nb_inference(weights=args.weights_dataset, family_weights=args.family_weights),
