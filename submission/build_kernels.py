@@ -388,8 +388,9 @@ if WHEELS:
                     "pylibjpeg", "pylibjpeg-libjpeg", "pylibjpeg-openjpeg"], check=False)
 CKPTS = []
 # our checkpoints only: the external stage's weights (no cfg inside) are run by its own script
+EXTERNAL_DIRS = ("rsna-knee-publication-swa-weights", "rsna-knee-compact-v1", "rsna-orthofoundation")  # run by own scripts
 walk_find(lambda d, f: CKPTS.extend(os.path.join(d, x) for x in sorted(f) if x.endswith(".pt")
-                                    and "rsna-knee-publication-swa-weights" not in d) and None)
+                                    and not any(e in d for e in EXTERNAL_DIRS)) and None)
 print("wheels:", WHEELS)
 try:
     import pylibjpeg, libjpeg, openjpeg  # noqa: F401  JPEG / JPEG-2000 DICOM decoders
