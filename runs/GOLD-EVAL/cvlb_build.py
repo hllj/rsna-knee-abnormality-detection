@@ -10,8 +10,9 @@ rows = D["rows"]
 S = D["stats"]
 k, c = D["fit_competitive"]
 use = [r for r in rows if r["group"] != "excluded"]
-GROUPS = {"single fold": "g-single", "5-fold": "g-five", "blend": "g-blend", "all-data": "g-all"}
-GLABEL = {"single fold": "Single fold", "5-fold": "5-fold ensemble", "blend": "Blend", "all-data": "All-data (Raptor v1/v2)"}
+fit_rows = [r for r in use if r["group"] != "OAI blend"]
+GROUPS = {"single fold": "g-single", "5-fold": "g-five", "blend": "g-blend", "all-data": "g-all", "OAI blend": "g-oai"}
+GLABEL = {"single fold": "Single fold", "5-fold": "5-fold ensemble", "blend": "Blend", "all-data": "All-data (Raptor v1/v2)", "OAI blend": "nartaa OAI-anchored (not in fit)"}
 esc = html.escape
 num = lambda x: x.replace("EXP-", "")
 
@@ -48,8 +49,8 @@ class Plot:
 
 
 # ---------- chart 1: gold-58 vs LB ----------
-p = Plot(760, 470, 0.872, 0.930, 0.902, 0.944)
-p.axes([0.875, 0.885, 0.895, 0.905, 0.915, 0.925], [0.905, 0.910, 0.915, 0.920, 0.925, 0.930, 0.935, 0.940],
+p = Plot(760, 490, 0.872, 0.934, 0.902, 0.952)
+p.axes([0.875, 0.885, 0.895, 0.905, 0.915, 0.925], [0.905, 0.910, 0.915, 0.920, 0.925, 0.930, 0.935, 0.940, 0.945, 0.950],
        "Gold-58 macro AUC", "Public LB AUC")
 gx = np.array([0.895, 0.928])
 rm = S["gold_lb_competitive"]["rmse"]
@@ -63,6 +64,7 @@ LAB1 = {  # exp: (dx, dy, anchor)
     "EXP-027": (8, 14, "start"), "EXP-058": (-6, -9, "end"), "EXP-067": (8, 14, "start"), "EXP-068": (-8, -6, "end"),
     "EXP-074": (0, -11, "middle"), "EXP-071": (-9, 4, "end"), "EXP-075": (8, 14, "start"), "EXP-076": (8, 4, "start"),
     "EXP-055": (8, 14, "start"), "EXP-060": (-8, 4, "end"),
+    "EXP-077": (-8, 4, "end"), "EXP-083": (0, 16, "middle"), "EXP-086": (8, 4, "start"), "EXP-069": (8, 4, "start"),
 }
 for r in sorted(use, key=lambda r: r["group"]):
     if r["gold"] is None:
@@ -76,7 +78,7 @@ for r in sorted(use, key=lambda r: r["group"]):
 chart1 = p.svg("Scatter of gold-58 AUC against public LB AUC for every scored experiment")
 
 # ---------- chart 2: residual vs the gold fit ----------
-res = sorted([r for r in use if r["resid"] is not None], key=lambda r: r["resid"])
+res = sorted([r for r in fit_rows if r["resid"] is not None], key=lambda r: r["resid"])
 bh, top = 19, 10
 H = top + bh * len(res) + 40
 p2 = Plot(760, H, -0.0108, 0.0055, 0, 1, ml=330, mr=24, mt=top, mb=40)
@@ -126,8 +128,8 @@ chart3 = p3.svg("Scatter of single-fold OOF AUC against LB for fold 0 and fold 1
 
 # ---------- chart 4: LB over time ----------
 order = [r for r in use]
-p4 = Plot(760, 300, -0.5, len(order) - 0.5, 0.900, 0.945, ml=58, mb=58)
-for v in [0.905, 0.915, 0.925, 0.935, 0.945]:
+p4 = Plot(760, 300, -0.5, len(order) - 0.5, 0.900, 0.952, ml=58, mb=58)
+for v in [0.905, 0.915, 0.925, 0.935, 0.945, 0.950]:
     y = p4.Y(v)
     p4.out.append(f'<line class="grid" x1="{p4.ml}" x2="{p4.w - p4.mr}" y1="{y:.1f}" y2="{y:.1f}"/>')
     p4.out.append(f'<text class="tick" x="{p4.ml - 8}" y="{y + 4:.1f}" text-anchor="end">{v:.3f}</text>')

@@ -65,7 +65,7 @@ META = {  # exp: (short label, group, fold of the OOF if single-fold, OOF overri
     "EXP-060": ("ConvNeXt 5f + Raptor 5f", "blend", None, None),
     "EXP-058": ("Raptor v1 all-data", "all-data", None, None),
     "EXP-059": ("EXP-055 + Raptor all-data", "blend", None, None),
-    "EXP-069": ("OAI: nartaa 0.65 + EXP-055", "excluded", None, None),
+    "EXP-069": ("OAI: nartaa 0.65 + EXP-055 0.35", "OAI blend", None, None),
     "EXP-067": ("Raptor v2 80-slice all-data", "all-data", None, None),
     "EXP-070": ("EXP-055 + reader v3", "blend", None, None),
     "EXP-068": ("Raptor v2 96-slice", "all-data", None, None),
@@ -74,8 +74,14 @@ META = {  # exp: (short label, group, fold of the OOF if single-fold, OOF overri
     "EXP-075": ("EXP-055 ×0.6 + 2 seeds ×0.4", "blend", None, None),
     "EXP-076": ("Gold-tuned blend", "blend", None, None),
     "EXP-078": ("Pseudo-label ConvNeXt f0", "single fold", 0, 0.8825),
+    "EXP-082": ("96-slice seeds + Raptor v3", "all-data", None, None),
+    "EXP-077": ("OAI: nartaa 0.8 + 2 seeds", "OAI blend", None, None),
+    "EXP-083": ("OAI: nartaa 0.7 + ConvNeXt 5f", "OAI blend", None, None),
+    "EXP-084": ("OAI: nartaa + ConvNeXt + reader", "OAI blend", None, None),
+    "EXP-085": ("OAI: finding-group routing", "OAI blend", None, None),
+    "EXP-086": ("OAI: routing + nartaa 224", "OAI blend", None, None),
 }
-GOLD_OVERRIDE = {"EXP-078": 0.9044}
+GOLD_OVERRIDE = {"EXP-078": 0.9044, "EXP-069": 0.9271, "EXP-077": 0.9248, "EXP-082": 0.9187, "EXP-083": 0.9248, "EXP-084": 0.9279, "EXP-085": 0.9281, "EXP-086": 0.9282}
 rows = []
 for e, (lab, grp, fold, oof_ovr) in META.items():
     x = r.loc[e]
@@ -102,7 +108,7 @@ def corr(d, a, b):
                 rmse=round(float(np.sqrt((resid ** 2).mean())), 4))
 
 
-use = df[df.group != "excluded"]
+use = df[~df.group.isin(["excluded", "OAI blend"])]
 comp = use[use.lb >= 0.925]
 f0 = use[(use.fold == 0) & use.oof.notna()]
 stats = {

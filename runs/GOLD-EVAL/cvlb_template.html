@@ -5,7 +5,7 @@
 :root{
   --bg:#F4F6F5; --panel:#FFFFFF; --ink:#17201D; --muted:#5B6863; --faint:#8C9994; --grid:#DCE3E0; --rule:#C9D3CF;
   --accent:#0E7A6E; --band:rgba(14,122,110,.10);
-  --single:#2F6FDB; --five:#7A4BD6; --blend:#C27317; --all:#0E8C7E; --pos:#0E8C7E; --neg:#C2412D;
+  --single:#2F6FDB; --five:#7A4BD6; --blend:#C27317; --all:#0E8C7E; --oai:#C2255C; --pos:#0E8C7E; --neg:#C2412D;
   --sans:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
   --cond:"IBM Plex Sans Condensed","Arial Narrow",ui-sans-serif,system-ui,sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
@@ -15,14 +15,14 @@
     color-scheme:dark;
     --bg:#0F1513; --panel:#161E1B; --ink:#E4EBE8; --muted:#97A6A0; --faint:#6F7D78; --grid:#26312D; --rule:#33403B;
     --accent:#3CC2B0; --band:rgba(60,194,176,.13);
-    --single:#6E9CF0; --five:#A788EE; --blend:#E1A04A; --all:#3CC2B0; --pos:#3CC2B0; --neg:#EF7A66;
+    --single:#6E9CF0; --five:#A788EE; --blend:#E1A04A; --all:#3CC2B0; --oai:#F06595; --pos:#3CC2B0; --neg:#EF7A66;
   }
 }
 :root[data-theme="dark"]{
   color-scheme:dark;
   --bg:#0F1513; --panel:#161E1B; --ink:#E4EBE8; --muted:#97A6A0; --faint:#6F7D78; --grid:#26312D; --rule:#33403B;
   --accent:#3CC2B0; --band:rgba(60,194,176,.13);
-  --single:#6E9CF0; --five:#A788EE; --blend:#E1A04A; --all:#3CC2B0; --pos:#3CC2B0; --neg:#EF7A66;
+  --single:#6E9CF0; --five:#A788EE; --blend:#E1A04A; --all:#3CC2B0; --oai:#F06595; --pos:#3CC2B0; --neg:#EF7A66;
 }
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--sans);margin:0}
@@ -49,7 +49,7 @@ p{margin:0;max-width:72ch}
 .chip{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:7px;vertical-align:-1px}
 .leg .chip{margin-right:0}
 .chip.g-single{background:var(--single)} .chip.g-five{background:var(--five)} .chip.g-blend{background:var(--blend)}
-.chip.g-all{background:var(--all)} .chip.g-ex{background:var(--faint)}
+.chip.g-all{background:var(--all)} .chip.g-oai{background:var(--oai)} .chip.g-ex{background:var(--faint)}
 .chip.ring{background:transparent;border:2px solid var(--blend)}
 svg .grid{stroke:var(--grid);stroke-width:1}
 svg .zero{stroke:var(--muted);stroke-width:1.2}
@@ -64,7 +64,7 @@ svg .band{fill:var(--band);stroke:none}
 svg .pair{stroke:var(--faint);stroke-width:1;stroke-dasharray:3 3;fill:none}
 svg .best{stroke:var(--accent);stroke-width:2;fill:none}
 svg .pt{stroke:var(--panel);stroke-width:1.5}
-svg .pt.g-single{fill:var(--single)} svg .pt.g-five{fill:var(--five)} svg .pt.g-blend{fill:var(--blend)} svg .pt.g-all{fill:var(--all)}
+svg .pt.g-single{fill:var(--single)} svg .pt.g-five{fill:var(--five)} svg .pt.g-blend{fill:var(--blend)} svg .pt.g-all{fill:var(--all)} svg .pt.g-oai{fill:var(--oai)}
 svg .pt.g-f0{fill:var(--single)} svg .pt.g-f1{fill:var(--panel);stroke:var(--blend);stroke-width:2.2}
 svg .bar.g-single{fill:var(--single)} svg .bar.g-five{fill:var(--five)} svg .bar.g-blend{fill:var(--blend)} svg .bar.g-all{fill:var(--all)}
 .findings{display:grid;gap:12px;counter-reset:f}
@@ -152,6 +152,11 @@ code{font:13px var(--mono)}
       <div class="finding"><div><h3>OOF is a reliable ruler inside one fold</h3>
         <p class="muted">Fold-0 OOF tracks the LB with r {{O0_P}} and a slope near 1. Fold 1 is an easier fold: EXP-008, EXP-021 and
         EXP-029 read about 0.010–0.012 higher OOF than their fold-0 twins for the same or a lower LB.</p></div></div>
+      <div class="finding"><div><h3>Gold cannot judge the OAI-anchored blends</h3>
+        <p class="muted">Every nartaa-anchored submission (pink) lands 0.005–0.008 above the gold line: nartaa alone reads 0.9229
+        on gold but 0.949 on the LB. Inside that group gold ranks them backwards. EXP-077 (nartaa + our seeds) has the best LB,
+        0.949, with mid-range gold; the routed blends EXP-085/086 have the highest gold, 0.928, and score 0.948. For these
+        blends only the LB decides. They are plotted but left out of every fit.</p></div></div>
       <div class="finding"><div><h3>The two local scores see different things</h3>
         <p class="muted">Gold and OOF correlate only r {{GO_P}}. The pseudo-label ConvNeXt (EXP-078) shows why. Its OOF rose +0.008
         on report labels and its gold barely moved (+0.0007), yet the LB rose +0.003. The LB sided with OOF here, and with gold
