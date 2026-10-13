@@ -69,3 +69,7 @@ EXP-083,2026-10-12,submit,hlly34/rsna-knee-inference,48,,,,,,,,,,,0.9248,0.947,,
 EXP-084,2026-10-12,submit,hlly34/rsna-knee-inference,49,,,,,,,,,,,0.9279,0.948,,"OAI blend: 0.7 x nartaa + 0.3 x (ConvNeXt dense 5f + reader v1 f0, mirror on reader)"
 EXP-085,2026-10-12,submit,hlly34/rsna-knee-inference,50,,,,,,,,,,,0.9281,0.948,,"OAI blend with finding-group routing (nartaa 0.6 OA/fracture/contusion, 0.75 effusion/synovitis, 0.85 else); ours ConvNeXt 5f 0.4 + reader 0.4 + CoAtNet f0 0.2"
 EXP-086,2026-10-12,submit,hlly34/rsna-knee-inference,51,,,,,,,,,,,0.9282,0.948,,EXP-085 + nartaa 0.945 224-crop as 0.1 of the anchor
+EXP-093,2026-10-13,submit,hlly34/rsna-knee-inference,54,,,,,,,,,,,,0.954,,nartaa 0.7 + heliosli compact 0.3 (public 0.951 recipe); verified smoke test; gold-58 0.9313; compare EXP-077 0.949
+EXP-094,2026-10-13,submit,hlly34/rsna-knee-inference,55,,,,,,,,,,,,0.953,,nartaa 0.65 + heliosli 0.25 + pseudo-label ConvNeXt 5f (EXP-079+087) 0.1; verified; gold-58 0.9306; compare EXP-093
+EXP-095,2026-10-13,submit,hlly34/rsna-knee-inference,56,,,,,,,,,,,,0.953,,"nartaa 0.65 + heliosli 0.25 + reader 5f (EXP-042+088, mirror) 0.1; verified; gold-58 0.9318; compare EXP-093"
+EXP-096,2026-10-13,submit,hlly34/rsna-knee-inference,57,,,,,,,,,,,,0.953,,"nartaa 0.6 + heliosli compact 0.2 + our 96-slice seeds 0.2 (mirror); verified; compare EXP-077 0.949, EXP-093"
