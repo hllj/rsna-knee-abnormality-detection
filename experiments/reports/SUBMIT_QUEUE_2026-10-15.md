@@ -20,6 +20,6 @@ Notes (2026-10-13 notebook scan):
 
 | EXP | Notebook | Blend | Gold-58 | Status |
 |---|---|---|---|---|
-| EXP-104 | tbd | rule-safe: seeds 0.35+0.35 + reader 5f 0.15 + goodpjw reader 0.15 | 0.9243 (seeds alone 0.9206) | building; for 10-15 |
+| EXP-104 | v66 | rule-safe: seeds 0.35+0.35 + reader 5f 0.15 + goodpjw reader 0.15 | 0.9243 (seeds alone 0.9206) | smoke-tested (no nartaa stage, nartaa weight 0); for 10-15 |
 
 Caution: gold gains from partners on top of the seeds did not transfer before (EXP-076 gold 0.9259 → LB 0.940).
