@@ -367,6 +367,7 @@ def nb_inference(weights: str = None, family_weights: str = None, infer_args: st
                  ext_weight: float = None, ext_weight_map: dict = None, ext224: float = None,
                  ext_hel: float = None, fusion: str = "rank",
                  ext_gpj: float = None, ext_gpj_map: dict = None, ext_hel_script: str = "heliosli_compact_stage.py"):
+    use_ext = ext_weight is not None or bool(ext_gpj) or bool(ext_gpj_map) or bool(ext_hel)
     srcs = ", ".join(f"`{USER}/rsna-knee-{s}` ({EXPERIMENTS[s]['id']})" for s in EXPERIMENTS["inference"]["sources"])
     if weights:
         srcs = f"the weights dataset `{weights}` (uploaded by `scripts/vast/submit.sh`)"
@@ -408,10 +409,12 @@ assert CKPTS, "attach the training notebooks' outputs"'''),
         *([("md", "## 1b. External stage — nartaa's 0.949 CoAtNet (verbatim scored source, OAI-trained; fallback pick)"),
            ("code", '''import shutil
 t_ext = time.time()
-subprocess.run([sys.executable, f"{CODE}/submission/external/nartaa_0949_check.py"], check=True)
-subprocess.run([sys.executable, f"{CODE}/submission/external/nartaa_0949_inference.py"], check=True, cwd="/kaggle/working")
-shutil.move("/kaggle/working/submission.csv", "/kaggle/working/ext_nartaa.csv")
-if EXT224:  # second view of the anchor: nartaa's 224-crop efficiency checkpoint (verbatim scored source)
+NARTAA_ON = bool(EXT_WEIGHT) or any(float(v) for v in EXT_MAP.values())
+if NARTAA_ON:
+    subprocess.run([sys.executable, f"{CODE}/submission/external/nartaa_0949_check.py"], check=True)
+    subprocess.run([sys.executable, f"{CODE}/submission/external/nartaa_0949_inference.py"], check=True, cwd="/kaggle/working")
+    shutil.move("/kaggle/working/submission.csv", "/kaggle/working/ext_nartaa.csv")
+if NARTAA_ON and EXT224:  # second view of the anchor: nartaa's 224-crop efficiency checkpoint (verbatim scored source)
     subprocess.run([sys.executable, f"{CODE}/submission/external/nartaa_0945_check.py"], check=True)
     subprocess.run([sys.executable, f"{CODE}/submission/external/nartaa_0945_inference.py"], check=True, cwd="/kaggle/working")
     shutil.move("/kaggle/working/submission.csv", "/kaggle/working/ext_nartaa224.csv")
@@ -427,7 +430,7 @@ if EXT_GPJ or EXT_GPJ_MAP:  # goodpjw's public 2.5D ConvNeXt reader (verbatim so
     subprocess.run([sys.executable, f"{CODE}/submission/external/goodpjw_reader/infer.py", COMP, "test",
                     "/kaggle/working/ext_goodpjw.csv", *GPJ_CK], check=True, cwd=f"{CODE}/submission/external/goodpjw_reader")
 EXT_SECONDS = round(time.time() - t_ext)
-print(f"external stage {EXT_SECONDS}s")''')] if ext_weight else []),
+print(f"external stage {EXT_SECONDS}s")''')] if use_ext else []),
         ("md", "## 2. Predict and rank-average"),
         ("code", '''t0 = time.time()
 from src.models.inference import main
@@ -439,9 +442,6 @@ print(f"inference {time.time() - t0:.0f}s")'''),
         *([("code", '''import pandas as pd
 # rank fusion: EXT_WEIGHT x nartaa (external) + (1 - EXT_WEIGHT) x our blend, per finding, then re-rank
 ours = pd.read_csv("/kaggle/working/submission.csv", dtype={"StudyInstanceUID": str}).set_index("StudyInstanceUID")
-ext = pd.read_csv("/kaggle/working/ext_nartaa.csv", dtype={"StudyInstanceUID": str}).set_index("StudyInstanceUID")
-assert set(ours.index) == set(ext.index), "external and our predictions cover different studies"
-ext = ext.loc[ours.index, ours.columns]
 from scipy.stats import norm
 
 
@@ -449,12 +449,17 @@ def tf(r):  # rank -> fusion space (probit keeps the extremes apart instead of c
     return pd.DataFrame(norm.ppf(r.clip(1e-4, 1 - 1e-4)), index=r.index, columns=r.columns) if FUSION == "probit" else r
 
 
-anchor = tf(ext.rank(pct=True))
-if EXT224:
+if NARTAA_ON:
+    ext = pd.read_csv("/kaggle/working/ext_nartaa.csv", dtype={"StudyInstanceUID": str}).set_index("StudyInstanceUID")
+    assert set(ours.index) == set(ext.index), "external and our predictions cover different studies"
+    anchor = tf(ext.loc[ours.index, ours.columns].rank(pct=True))
+else:  # rule-safe blend: no nartaa anchor
+    anchor = tf(ours.rank(pct=True)) * 0.0
+if NARTAA_ON and EXT224:
     e224 = pd.read_csv("/kaggle/working/ext_nartaa224.csv", dtype={"StudyInstanceUID": str}).set_index("StudyInstanceUID")
     assert set(e224.index) == set(ours.index), "224-crop predictions cover different studies"
     anchor = (1 - EXT224) * anchor + EXT224 * tf(e224.loc[ours.index, ours.columns].rank(pct=True))
-w = pd.Series({c: float(EXT_MAP.get(c, EXT_WEIGHT)) for c in ours.columns})   # nartaa share per finding
+w = pd.Series({c: float(EXT_MAP.get(c, EXT_WEIGHT or 0.0)) for c in ours.columns})   # nartaa share per finding
 wh = float(EXT_HEL or 0.0)
 wg = pd.Series({c: float(EXT_GPJ_MAP.get(c, EXT_GPJ or 0.0)) for c in ours.columns})   # goodpjw share per finding
 assert (w + wh + wg <= 1 + 1e-9).all(), "external weights exceed 1"
@@ -470,7 +475,7 @@ if wh:
 fused = fused.rank(pct=True)
 assert fused.notna().all().all()
 fused.reset_index().to_csv("/kaggle/working/submission.csv", index=False)
-print("fused", fused.shape, "| ext weight per finding", w.round(3).to_dict(), "| ext224", EXT224, "| heliosli", EXT_HEL, "| goodpjw", wg.round(3).to_dict(), "| fusion", FUSION)''')] if ext_weight else []),
+print("fused", fused.shape, "| ext weight per finding", w.round(3).to_dict(), "| ext224", EXT224, "| heliosli", EXT_HEL, "| goodpjw", wg.round(3).to_dict(), "| fusion", FUSION)''')] if use_ext else []),
         ("code", '''import numpy as np, pandas as pd
 sub = pd.read_csv("/kaggle/working/submission.csv")
 files = glob.glob("/tmp/knee_cache/*/*.npz")   # only written in --mode cache (stream keeps stacks in memory)

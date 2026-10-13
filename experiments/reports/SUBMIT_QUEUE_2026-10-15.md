@@ -11,3 +11,15 @@ Notes (2026-10-13 notebook scan):
   the Raptor slot moved a 0.954 notebook from rank 437 to 320 (varshithakolupuri).
 
 - **2026-10-14 00:40 local:** owner approved R7. EXP-103 (v65) moved to today's spare slot, 07:10 local. EXP-102 (v64) stays for 10-15.
+
+## Final-pick rule (owner, 2026-10-14)
+- **Pick 1 — top score:** highest public LB, any public weights (OAI- or fastMRI-trained allowed).
+- **Pick 2 — rule-safe:** only models trained on competition data (+ public label tables, ImageNet backbones):
+  our models and goodpjw's public reader. No nartaa (OAI), heliosli compact-v1 (training data not stated) or R7 (fastMRI).
+  Default **EXP-074 (0.941)**; **EXP-104** replaces it only if it scores higher on the LB.
+
+| EXP | Notebook | Blend | Gold-58 | Status |
+|---|---|---|---|---|
+| EXP-104 | tbd | rule-safe: seeds 0.35+0.35 + reader 5f 0.15 + goodpjw reader 0.15 | 0.9243 (seeds alone 0.9206) | building; for 10-15 |
+
+Caution: gold gains from partners on top of the seeds did not transfer before (EXP-076 gold 0.9259 → LB 0.940).
