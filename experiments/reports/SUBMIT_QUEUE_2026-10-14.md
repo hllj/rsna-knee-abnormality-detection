@@ -15,10 +15,19 @@
 ## Schedule
 | # | Local | EXP | Notebook | Change vs EXP-093 | Gold-58 | Lateral OA (gold) |
 |---|---|---|---|---|---|---|
-| 1 | 07:05 | EXP-097 | v58 | Lateral OA only: nartaa 0.2 + heliosli 0.3 + reader 5f 0.5 | 0.9340 | 0.828 |
+| 1 | submitted 10-13 ~14:00 local | EXP-097 | v58 | Lateral OA only: nartaa 0.2 + heliosli 0.3 + reader 5f 0.5 | 0.9340 | 0.828 |
 | 2 | 07:06 | EXP-099 | v60 | EXP-097 + probit fusion | 0.9342 | 0.830 |
 | 3 | 07:07 | EXP-100 | v61 | nartaa 0.6 + heliosli 0.25 + goodpjw public reader 0.15 | — | — |
 | 4 | 07:08 | EXP-098 | v59 | probit fusion only | 0.9313 | 0.795 |
 | 5 | — | spare | — | — | — | — |
 
 Final pick 2 stays the EXP-093 recipe (fixed public weights, not tuned on our LB).
+
+## Changes approved 2026-10-13 evening
+- **EXP-101 = notebook v62**: nartaa 0.6 + heliosli 0.4 (smoke test OK, external stage 222 s).
+- 07:06 is conditional: EXP-099 (v60) if EXP-097 >= 0.954, otherwise EXP-101 (v62).
+- 07:09 submits EXP-101 (v62) if it was not used at 07:06; otherwise spare.
+- EXP-100 rebuilt: goodpjw public reader 0.3 on Lateral OA + Contusion only (nartaa 0.4 there), base 0.7/0.3 elsewhere.
+  goodpjw on gold-58: Lateral OA 0.855 vs nartaa 0.776, Contusion 0.957 vs 0.937, Effusion 0.882 vs 0.973 (avoid).
+  Gold: restricted 0.9341 vs all-findings 0.9329 vs base 0.9313. New notebook version: see below once built.
+- **EXP-100 = notebook v63** (restricted; smoke test OK; goodpjw 0.3 on Lateral OA + Contusion, 0 elsewhere). 07:07 now submits v63 (v61 retired).

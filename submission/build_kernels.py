@@ -366,7 +366,7 @@ print(EXP)'''),
 def nb_inference(weights: str = None, family_weights: str = None, infer_args: str = None,
                  ext_weight: float = None, ext_weight_map: dict = None, ext224: float = None,
                  ext_hel: float = None, fusion: str = "rank",
-                 ext_gpj: float = None):
+                 ext_gpj: float = None, ext_gpj_map: dict = None):
     srcs = ", ".join(f"`{USER}/rsna-knee-{s}` ({EXPERIMENTS[s]['id']})" for s in EXPERIMENTS["inference"]["sources"])
     if weights:
         srcs = f"the weights dataset `{weights}` (uploaded by `scripts/vast/submit.sh`)"
@@ -381,7 +381,8 @@ def nb_inference(weights: str = None, family_weights: str = None, infer_args: st
          f"EXT224 = {ext224!r}   # share of nartaa's 0.945 224-crop model inside the external anchor (None = off)\n"
          f"EXT_HEL = {ext_hel!r}   # rank weight of heliosli's public compact ConvNeXt-S stage (None = off)\n"
          f"FUSION = {fusion!r}   # rank: average percentile ranks | probit: average their normal quantiles\n"
-         f"EXT_GPJ = {ext_gpj!r}   # rank weight of goodpjw's public 2.5D ConvNeXt reader stage (None = off)\n" + FIND),
+         f"EXT_GPJ = {ext_gpj!r}   # rank weight of goodpjw's public 2.5D ConvNeXt reader stage (None = off)\n"
+         f"EXT_GPJ_MAP = {ext_gpj_map or {}!r}   # per-finding goodpjw weight (overrides EXT_GPJ for those findings)\n" + FIND),
         ("md", "## 1. Offline dependencies and checkpoints\nThe pylibjpeg wheels come from a training notebook's "
                "output (needed for JPEG-compressed DICOMs)."),
         ("code", '''WHEELS = walk_find(lambda d, f: d if any(x.startswith("pylibjpeg") and x.endswith(".whl") for x in f) else None)
@@ -416,7 +417,7 @@ if EXT224:  # second view of the anchor: nartaa's 224-crop efficiency checkpoint
 if EXT_HEL:  # heliosli's public compact ConvNeXt-S model (verbatim stage, writes ours_sub.csv)
     subprocess.run([sys.executable, f"{CODE}/submission/external/heliosli_compact_stage.py"], check=True, cwd="/kaggle/working")
     shutil.move("/kaggle/working/ours_sub.csv", "/kaggle/working/ext_heliosli.csv")
-if EXT_GPJ:  # goodpjw's public 2.5D ConvNeXt reader (verbatim source), averaged over its 3 public folds
+if EXT_GPJ or EXT_GPJ_MAP:  # goodpjw's public 2.5D ConvNeXt reader (verbatim source), averaged over its 3 public folds
     GPJ_CK = []
     walk_find(lambda d, f: GPJ_CK.extend(os.path.join(d, x) for x in sorted(f)
                                          if x.startswith("cnxt_") and x.endswith(".pt")) and None)
@@ -453,13 +454,14 @@ if EXT224:
     assert set(e224.index) == set(ours.index), "224-crop predictions cover different studies"
     anchor = (1 - EXT224) * anchor + EXT224 * tf(e224.loc[ours.index, ours.columns].rank(pct=True))
 w = pd.Series({c: float(EXT_MAP.get(c, EXT_WEIGHT)) for c in ours.columns})   # nartaa share per finding
-wh, wg = float(EXT_HEL or 0.0), float(EXT_GPJ or 0.0)
+wh = float(EXT_HEL or 0.0)
+wg = pd.Series({c: float(EXT_GPJ_MAP.get(c, EXT_GPJ or 0.0)) for c in ours.columns})   # goodpjw share per finding
 assert (w + wh + wg <= 1 + 1e-9).all(), "external weights exceed 1"
 fused = anchor.mul(w, axis=1) + tf(ours.rank(pct=True)).mul(1 - w - wh - wg, axis=1)
-if wg:
+if wg.any():
     gpj = pd.read_csv("/kaggle/working/ext_goodpjw.csv", dtype={"StudyInstanceUID": str}).set_index("StudyInstanceUID")
     assert set(gpj.index) == set(ours.index), "goodpjw predictions cover different studies"
-    fused = fused + wg * tf(gpj.loc[ours.index, ours.columns].rank(pct=True))
+    fused = fused + tf(gpj.loc[ours.index, ours.columns].rank(pct=True)).mul(wg, axis=1)
 if wh:
     hel = pd.read_csv("/kaggle/working/ext_heliosli.csv", dtype={"StudyInstanceUID": str}).set_index("StudyInstanceUID")
     assert set(hel.index) == set(ours.index), "heliosli predictions cover different studies"
@@ -467,7 +469,7 @@ if wh:
 fused = fused.rank(pct=True)
 assert fused.notna().all().all()
 fused.reset_index().to_csv("/kaggle/working/submission.csv", index=False)
-print("fused", fused.shape, "| ext weight per finding", w.round(3).to_dict(), "| ext224", EXT224, "| heliosli", EXT_HEL, "| goodpjw", EXT_GPJ, "| fusion", FUSION)''')] if ext_weight else []),
+print("fused", fused.shape, "| ext weight per finding", w.round(3).to_dict(), "| ext224", EXT224, "| heliosli", EXT_HEL, "| goodpjw", wg.round(3).to_dict(), "| fusion", FUSION)''')] if ext_weight else []),
         ("code", '''import numpy as np, pandas as pd
 sub = pd.read_csv("/kaggle/working/submission.csv")
 files = glob.glob("/tmp/knee_cache/*/*.npz")   # only written in --mode cache (stream keeps stacks in memory)
@@ -659,6 +661,8 @@ if __name__ == "__main__":
                     help='per-finding external weight, e.g. "Lateral OA=0.6,PF OA=0.6" (others use --ext-weight)')
     ap.add_argument("--ext-gpj", type=float, default=None,
                     help="rank weight of goodpjw's public 2.5D ConvNeXt reader stage (needs its dataset attached)")
+    ap.add_argument("--ext-gpj-map", default=None,
+                    help='per-finding goodpjw weight, e.g. "Lateral OA=0.3,PF OA=0.15" (others use --ext-gpj or 0)')
     ap.add_argument("--fusion", choices=["rank", "probit"], default="rank",
                     help="how external and our ranks are combined (probit = average of normal quantiles)")
     ap.add_argument("--ext-hel", type=float, default=None,
@@ -709,7 +713,9 @@ if __name__ == "__main__":
                                         ext_weight_map={k.strip(): float(v) for k, v in (kv.split("=") for kv in
                                                         (args.ext_weight_map or "").split(",") if kv)},
                                         ext224=args.ext224, ext_hel=args.ext_hel, fusion=args.fusion,
-                                        ext_gpj=args.ext_gpj), meta)
+                                        ext_gpj=args.ext_gpj,
+                                        ext_gpj_map={k.strip(): float(v) for k, v in (kv.split("=") for kv in
+                                                     (args.ext_gpj_map or "").split(",") if kv)}), meta)
     elif args.weights_dataset:
         EXPERIMENTS["inference"]["sources"] = []
         write("inference", nb_inference(weights=args.weights_dataset, family_weights=args.family_weights),
