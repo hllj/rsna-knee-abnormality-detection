@@ -366,7 +366,7 @@ print(EXP)'''),
 def nb_inference(weights: str = None, family_weights: str = None, infer_args: str = None,
                  ext_weight: float = None, ext_weight_map: dict = None, ext224: float = None,
                  ext_hel: float = None, fusion: str = "rank",
-                 ext_gpj: float = None, ext_gpj_map: dict = None):
+                 ext_gpj: float = None, ext_gpj_map: dict = None, ext_hel_script: str = "heliosli_compact_stage.py"):
     srcs = ", ".join(f"`{USER}/rsna-knee-{s}` ({EXPERIMENTS[s]['id']})" for s in EXPERIMENTS["inference"]["sources"])
     if weights:
         srcs = f"the weights dataset `{weights}` (uploaded by `scripts/vast/submit.sh`)"
@@ -382,7 +382,8 @@ def nb_inference(weights: str = None, family_weights: str = None, infer_args: st
          f"EXT_HEL = {ext_hel!r}   # rank weight of heliosli's public compact ConvNeXt-S stage (None = off)\n"
          f"FUSION = {fusion!r}   # rank: average percentile ranks | probit: average their normal quantiles\n"
          f"EXT_GPJ = {ext_gpj!r}   # rank weight of goodpjw's public 2.5D ConvNeXt reader stage (None = off)\n"
-         f"EXT_GPJ_MAP = {ext_gpj_map or {}!r}   # per-finding goodpjw weight (overrides EXT_GPJ for those findings)\n" + FIND),
+         f"EXT_GPJ_MAP = {ext_gpj_map or {}!r}   # per-finding goodpjw weight (overrides EXT_GPJ for those findings)\n"
+         f"EXT_HEL_SCRIPT = {ext_hel_script!r}   # heliosli stage: compact v1 (S6) or R7\n" + FIND),
         ("md", "## 1. Offline dependencies and checkpoints\nThe pylibjpeg wheels come from a training notebook's "
                "output (needed for JPEG-compressed DICOMs)."),
         ("code", '''WHEELS = walk_find(lambda d, f: d if any(x.startswith("pylibjpeg") and x.endswith(".whl") for x in f) else None)
@@ -392,7 +393,7 @@ if WHEELS:
                     "pylibjpeg", "pylibjpeg-libjpeg", "pylibjpeg-openjpeg"], check=False)
 CKPTS = []
 # our checkpoints only: the external stage's weights (no cfg inside) are run by its own script
-EXTERNAL_DIRS = ("rsna-knee-publication-swa-weights", "rsna-knee-compact-v1", "rsna-orthofoundation",
+EXTERNAL_DIRS = ("rsna-knee-publication-swa-weights", "rsna-knee-compact-v1", "rsna-knee-compact-r7", "rsna-orthofoundation",
                  "rsna-knee-2-5d-convnext-reader")  # run by own scripts
 walk_find(lambda d, f: CKPTS.extend(os.path.join(d, x) for x in sorted(f) if x.endswith(".pt")
                                     and not any(e in d for e in EXTERNAL_DIRS)) and None)
@@ -415,7 +416,7 @@ if EXT224:  # second view of the anchor: nartaa's 224-crop efficiency checkpoint
     subprocess.run([sys.executable, f"{CODE}/submission/external/nartaa_0945_inference.py"], check=True, cwd="/kaggle/working")
     shutil.move("/kaggle/working/submission.csv", "/kaggle/working/ext_nartaa224.csv")
 if EXT_HEL:  # heliosli's public compact ConvNeXt-S model (verbatim stage, writes ours_sub.csv)
-    subprocess.run([sys.executable, f"{CODE}/submission/external/heliosli_compact_stage.py"], check=True, cwd="/kaggle/working")
+    subprocess.run([sys.executable, f"{CODE}/submission/external/{EXT_HEL_SCRIPT}"], check=True, cwd="/kaggle/working")
     shutil.move("/kaggle/working/ours_sub.csv", "/kaggle/working/ext_heliosli.csv")
 if EXT_GPJ or EXT_GPJ_MAP:  # goodpjw's public 2.5D ConvNeXt reader (verbatim source), averaged over its 3 public folds
     GPJ_CK = []
@@ -661,6 +662,8 @@ if __name__ == "__main__":
                     help='per-finding external weight, e.g. "Lateral OA=0.6,PF OA=0.6" (others use --ext-weight)')
     ap.add_argument("--ext-gpj", type=float, default=None,
                     help="rank weight of goodpjw's public 2.5D ConvNeXt reader stage (needs its dataset attached)")
+    ap.add_argument("--ext-hel-script", default="heliosli_compact_stage.py",
+                    help="heliosli stage script in submission/external (heliosli_r7_stage.py for R7)")
     ap.add_argument("--ext-gpj-map", default=None,
                     help='per-finding goodpjw weight, e.g. "Lateral OA=0.3,PF OA=0.15" (others use --ext-gpj or 0)')
     ap.add_argument("--fusion", choices=["rank", "probit"], default="rank",
@@ -715,7 +718,8 @@ if __name__ == "__main__":
                                         ext224=args.ext224, ext_hel=args.ext_hel, fusion=args.fusion,
                                         ext_gpj=args.ext_gpj,
                                         ext_gpj_map={k.strip(): float(v) for k, v in (kv.split("=") for kv in
-                                                     (args.ext_gpj_map or "").split(",") if kv)}), meta)
+                                                     (args.ext_gpj_map or "").split(",") if kv)},
+                                        ext_hel_script=args.ext_hel_script), meta)
     elif args.weights_dataset:
         EXPERIMENTS["inference"]["sources"] = []
         write("inference", nb_inference(weights=args.weights_dataset, family_weights=args.family_weights),
