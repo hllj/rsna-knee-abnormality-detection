@@ -31,3 +31,4 @@ Final pick 2 stays the EXP-093 recipe (fixed public weights, not tuned on our LB
   goodpjw on gold-58: Lateral OA 0.855 vs nartaa 0.776, Contusion 0.957 vs 0.937, Effusion 0.882 vs 0.973 (avoid).
   Gold: restricted 0.9341 vs all-findings 0.9329 vs base 0.9313. New notebook version: see below once built.
 - **EXP-100 = notebook v63** (restricted; smoke test OK; goodpjw 0.3 on Lateral OA + Contusion, 0 elsewhere). 07:07 now submits v63 (v61 retired).
+| 5 | 07:10 | EXP-103 | v65 | heliosli R7 recipe: nartaa 0.5 (384 + 224 at 0.35) + R7 0.5 (fastMRI-trained; owner accepted the risk) | — | — |
