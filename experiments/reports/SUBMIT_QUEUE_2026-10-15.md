@@ -23,3 +23,17 @@ Notes (2026-10-13 notebook scan):
 | EXP-104 | v66 | rule-safe: seeds 0.35+0.35 + reader 5f 0.15 + goodpjw reader 0.15 | 0.9243 (seeds alone 0.9206) | smoke-tested (no nartaa stage, nartaa weight 0); for 10-15 |
 
 Caution: gold gains from partners on top of the seeds did not transfer before (EXP-076 gold 0.9259 → LB 0.940).
+
+## Final queue 2026-10-15 (owner approved routing 10-14 22:40; submits 07:06 local)
+Per-finding nartaa/R7 routing on the EXP-103 base: R7-side = Lateral OA, PF OA, Lateral Meniscus, ACL;
+nartaa-side = Effusion, Fracture, Medial Meniscus, Baker's; other findings 0.5/0.5. Builder: `--ext-hel-map`.
+
+| EXP | Notebook | R7 weight (R7-side / nartaa-side) | Gold-58 (in-sample) | Status |
+|---|---|---|---|---|
+| EXP-104 | v66 | rule-safe (see above) | 0.9243 | smoke-tested |
+| EXP-105 | v67 | 0.65 / 0.35 | 0.9404 | smoke-tested (external stages 461 s) |
+| EXP-106 | v68 | 0.7 / 0.3 | 0.9418 | smoke-tested (465 s) |
+| EXP-107 | v69 | 0.8 / 0.2 | 0.9439 | smoke-tested (430 s) |
+
+EXP-103 gold 0.9365. Routing groups were chosen on gold, so the gold gains are optimistic; the LB decides.
+Slot 5 kept spare (EXP-102 v64 can use it).
