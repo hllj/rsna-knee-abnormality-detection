@@ -13,6 +13,11 @@ Final picks now: **EXP-105** (top score) and **EXP-104** (rule-safe, 0.943).
 
 Scheduled 07:04 local; the run checks EXP-113 first. At least one slot stays spare.
 
+**EXP-113 result (10-15 19:57 local): 0.957**, the same displayed score as EXP-105. Submit → score took 5 h 15 min (full
+test, including queue), matching the flip-TTA estimate. Our rank went 240 → 266 while other teams moved; a
+snapshot comparison could not show whether EXP-113's unrounded score is above EXP-105's. Flip TTA gives no visible gain
+→ per the rule, 10-16 submits **EXP-114 only**; EXP-115/116 stay unsubmitted. Pick 1 stays EXP-105 (faster, same score).
+
 ## Notes (2026-10-15)
 - **R6 dropped.** heliosli's public 0.9573 notebook uses R6 (bundle fe055406) + flip TTA, but
   `heliosli/rsna-knee-r6-frozen-fe055406` version 2 now holds the R7 bundle under the same names; Kaggle attaches the
