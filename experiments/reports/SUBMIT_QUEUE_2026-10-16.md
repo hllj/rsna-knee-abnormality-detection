@@ -18,6 +18,10 @@ test, including queue), matching the flip-TTA estimate. Our rank went 240 → 26
 snapshot comparison could not show whether EXP-113's unrounded score is above EXP-105's. Flip TTA gives no visible gain
 → per the rule, 10-16 submits **EXP-114 only**; EXP-115/116 stay unsubmitted. Pick 1 stays EXP-105 (faster, same score).
 
+**Update 10-15 21:30 (owner, Kaggle submissions page sorted by unrounded score): EXP-113 > EXP-105 > EXP-106.**
+Flip TTA gives a small real gain → **pick 1 = EXP-113** (full-test run 5 h 15 min, within 9 h). 10-16 now submits
+**EXP-114 and EXP-115** (0.6/0.4 without / with flip), 3 slots spare; EXP-116 dropped.
+
 ## Notes (2026-10-15)
 - **R6 dropped.** heliosli's public 0.9573 notebook uses R6 (bundle fe055406) + flip TTA, but
   `heliosli/rsna-knee-r6-frozen-fe055406` version 2 now holds the R7 bundle under the same names; Kaggle attaches the
