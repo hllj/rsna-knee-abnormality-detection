@@ -367,7 +367,7 @@ def nb_inference(weights: str = None, family_weights: str = None, infer_args: st
                  ext_weight: float = None, ext_weight_map: dict = None, ext224: float = None,
                  ext_hel: float = None, fusion: str = "rank",
                  ext_gpj: float = None, ext_gpj_map: dict = None, ext_hel_script: str = "heliosli_compact_stage.py",
-                 ext_hel_map: dict = None):
+                 ext_hel_map: dict = None, ext_hel2_script: str = None, ext_hel_mix: float = None):
     use_ext = ext_weight is not None or bool(ext_gpj) or bool(ext_gpj_map) or bool(ext_hel) or bool(ext_hel_map)
     srcs = ", ".join(f"`{USER}/rsna-knee-{s}` ({EXPERIMENTS[s]['id']})" for s in EXPERIMENTS["inference"]["sources"])
     if weights:
@@ -386,7 +386,9 @@ def nb_inference(weights: str = None, family_weights: str = None, infer_args: st
          f"EXT_GPJ = {ext_gpj!r}   # rank weight of goodpjw's public 2.5D ConvNeXt reader stage (None = off)\n"
          f"EXT_GPJ_MAP = {ext_gpj_map or {}!r}   # per-finding goodpjw weight (overrides EXT_GPJ for those findings)\n"
          f"EXT_HEL_SCRIPT = {ext_hel_script!r}   # heliosli stage: compact v1 (S6) or R7\n"
-         f"EXT_HEL_MAP = {ext_hel_map or {}!r}   # per-finding heliosli weight (overrides EXT_HEL for those findings)\n" + FIND),
+         f"EXT_HEL_MAP = {ext_hel_map or {}!r}   # per-finding heliosli weight (overrides EXT_HEL for those findings)\n"
+         f"EXT_HEL2_SCRIPT = {ext_hel2_script!r}   # second heliosli stage (e.g. R6 + flip TTA) mixed into the heliosli slot (None = off)\n"
+         f"EXT_HEL_MIX = {ext_hel_mix!r}   # share of the second heliosli stage inside the heliosli slot\n" + FIND),
         ("md", "## 1. Offline dependencies and checkpoints\nThe pylibjpeg wheels come from a training notebook's "
                "output (needed for JPEG-compressed DICOMs)."),
         ("code", '''WHEELS = walk_find(lambda d, f: d if any(x.startswith("pylibjpeg") and x.endswith(".whl") for x in f) else None)
@@ -420,9 +422,15 @@ if NARTAA_ON and EXT224:  # second view of the anchor: nartaa's 224-crop efficie
     subprocess.run([sys.executable, f"{CODE}/submission/external/nartaa_0945_check.py"], check=True)
     subprocess.run([sys.executable, f"{CODE}/submission/external/nartaa_0945_inference.py"], check=True, cwd="/kaggle/working")
     shutil.move("/kaggle/working/submission.csv", "/kaggle/working/ext_nartaa224.csv")
-if EXT_HEL or EXT_HEL_MAP:  # heliosli's public compact ConvNeXt-S model (verbatim stage, writes ours_sub.csv)
-    subprocess.run([sys.executable, f"{CODE}/submission/external/{EXT_HEL_SCRIPT}"], check=True, cwd="/kaggle/working")
-    shutil.move("/kaggle/working/ours_sub.csv", "/kaggle/working/ext_heliosli.csv")
+HEL_STAGES = [(EXT_HEL_SCRIPT, "ext_heliosli.csv")] + ([(EXT_HEL2_SCRIPT, "ext_heliosli2.csv")] if EXT_HEL2_SCRIPT else [])
+if EXT_HEL or EXT_HEL_MAP:  # heliosli's public compact ConvNeXt-S model(s) (verbatim stages, each writes ours_sub.csv)
+    for script, out in HEL_STAGES:
+        for d in ("/kaggle/temp/probe", "/tmp/probe"):   # the stages share this scratch dir (bundle, prediction): start clean
+            shutil.rmtree(d, ignore_errors=True)
+        t_h = time.time()
+        subprocess.run([sys.executable, f"{CODE}/submission/external/{script}"], check=True, cwd="/kaggle/working")
+        shutil.move("/kaggle/working/ours_sub.csv", f"/kaggle/working/{out}")
+        print(f"[heliosli] {script} -> {out} {time.time() - t_h:.0f}s", flush=True)
 if EXT_GPJ or EXT_GPJ_MAP:  # goodpjw's public 2.5D ConvNeXt reader (verbatim source), averaged over its 3 public folds
     GPJ_CK = []
     walk_find(lambda d, f: GPJ_CK.extend(os.path.join(d, x) for x in sorted(f)
@@ -473,11 +481,16 @@ if wg.any():
 if wh.any():
     hel = pd.read_csv("/kaggle/working/ext_heliosli.csv", dtype={"StudyInstanceUID": str}).set_index("StudyInstanceUID")
     assert set(hel.index) == set(ours.index), "heliosli predictions cover different studies"
-    fused = fused + tf(hel.loc[ours.index, ours.columns].rank(pct=True)).mul(wh, axis=1)
+    hel_r = tf(hel.loc[ours.index, ours.columns].rank(pct=True))
+    if EXT_HEL2_SCRIPT:
+        hel2 = pd.read_csv("/kaggle/working/ext_heliosli2.csv", dtype={"StudyInstanceUID": str}).set_index("StudyInstanceUID")
+        assert set(hel2.index) == set(ours.index), "second heliosli predictions cover different studies"
+        hel_r = (1 - EXT_HEL_MIX) * hel_r + EXT_HEL_MIX * tf(hel2.loc[ours.index, ours.columns].rank(pct=True))
+    fused = fused + hel_r.mul(wh, axis=1)
 fused = fused.rank(pct=True)
 assert fused.notna().all().all()
 fused.reset_index().to_csv("/kaggle/working/submission.csv", index=False)
-print("fused", fused.shape, "| ext weight per finding", w.round(3).to_dict(), "| ext224", EXT224, "| heliosli", wh.round(3).to_dict(), "| goodpjw", wg.round(3).to_dict(), "| fusion", FUSION)''')] if use_ext else []),
+print("fused", fused.shape, "| ext weight per finding", w.round(3).to_dict(), "| ext224", EXT224, "| heliosli", wh.round(3).to_dict(), "| hel2", EXT_HEL2_SCRIPT, EXT_HEL_MIX, "| goodpjw", wg.round(3).to_dict(), "| fusion", FUSION)''')] if use_ext else []),
         ("code", '''import numpy as np, pandas as pd
 sub = pd.read_csv("/kaggle/working/submission.csv")
 files = glob.glob("/tmp/knee_cache/*/*.npz")   # only written in --mode cache (stream keeps stacks in memory)
@@ -679,6 +692,10 @@ if __name__ == "__main__":
                     help="rank weight of heliosli's public compact ConvNeXt-S stage (needs its two datasets attached)")
     ap.add_argument("--ext-hel-map", default=None,
                     help='per-finding heliosli weight, e.g. "Lateral OA=0.65,Effusion=0.35" (others use --ext-hel)')
+    ap.add_argument("--ext-hel2-script", default=None,
+                    help="second heliosli stage in submission/external (e.g. heliosli_r6_stage.py), mixed into the heliosli slot")
+    ap.add_argument("--ext-hel-mix", type=float, default=None,
+                    help="share of the second heliosli stage inside the heliosli slot (needs --ext-hel2-script)")
     ap.add_argument("--ext224", type=float, default=None,
                     help="share of nartaa's 0.945 224-crop model inside the external anchor (second external stage)")
     ap.add_argument("--infer-args", default=None,
@@ -730,7 +747,8 @@ if __name__ == "__main__":
                                                      (args.ext_gpj_map or "").split(",") if kv)},
                                         ext_hel_script=args.ext_hel_script,
                                         ext_hel_map={k.strip(): float(v) for k, v in (kv.split("=") for kv in
-                                                     (args.ext_hel_map or "").split(",") if kv)}), meta)
+                                                     (args.ext_hel_map or "").split(",") if kv)},
+                                        ext_hel2_script=args.ext_hel2_script, ext_hel_mix=args.ext_hel_mix), meta)
     elif args.weights_dataset:
         EXPERIMENTS["inference"]["sources"] = []
         write("inference", nb_inference(weights=args.weights_dataset, family_weights=args.family_weights),
