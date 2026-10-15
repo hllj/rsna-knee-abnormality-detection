@@ -37,3 +37,14 @@ nartaa-side = Effusion, Fracture, Medial Meniscus, Baker's; other findings 0.5/0
 
 EXP-103 gold 0.9365. Routing groups were chosen on gold, so the gold gains are optimistic; the LB decides.
 Slot 5 kept spare (EXP-102 v64 can use it).
+
+## Results (2026-10-15)
+| EXP | Public LB | Note |
+|---|---|---|
+| EXP-104 | **0.943** | new rule-safe best (EXP-074 0.941) → pick 2 |
+| EXP-105 | **0.957** | new best → pick 1; public rank 240/6,013 (silver line rank 300 at 0.956) |
+| EXP-106 | 0.957 | rank did not move when it scored → unrounded ≤ EXP-105 |
+| EXP-107 | 0.956 | routing too strong |
+
+Routing gains on gold (0.9404 → 0.9439) did not keep growing on the LB: the mild 0.65/0.35 split is best.
+Submitted late (07:39–09:23) after the 07:06 run stalled; slot 5 unused.
