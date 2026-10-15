@@ -399,7 +399,7 @@ if WHEELS:
 CKPTS = []
 # our checkpoints only: the external stage's weights (no cfg inside) are run by its own script
 EXTERNAL_DIRS = ("rsna-knee-publication-swa-weights", "rsna-knee-compact-v1", "rsna-knee-compact-r7", "rsna-orthofoundation",
-                 "rsna-knee-2-5d-convnext-reader")  # run by own scripts
+                 "rsna-knee-2-5d-convnext-reader", "rsna-knee-r6-frozen")  # run by own scripts
 walk_find(lambda d, f: CKPTS.extend(os.path.join(d, x) for x in sorted(f) if x.endswith(".pt")
                                     and not any(e in d for e in EXTERNAL_DIRS)) and None)
 print("wheels:", WHEELS)
