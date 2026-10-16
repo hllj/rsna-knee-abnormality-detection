@@ -34,3 +34,10 @@ Flip TTA gives a small real gain → **pick 1 = EXP-113** (full-test run 5 h 15 
   (~$3–4).
 
 **10-16 results:** EXP-114 0.957, EXP-115 0.957: all four of EXP-105/113/114/115 show 0.957. Unrounded order on the Kaggle submissions page decides pick 1 (owner checks). Weight tuning stops here.
+
+## R6 candidates (heliosli re-published the v1 R6 bundle as `heliosli/rsna-knee-r6-frozen-fe055406-w1`, manifest sha256 6508ce69 = v1)
+
+| EXP | Notebook | Change vs EXP-113 | Status |
+|---|---|---|---|
+| EXP-117 | v76 | R6 + flip TTA in place of R7 + flip | **0.957** (submitted 14:33, scored 19:49 local, 5 h 16 min) |
+| EXP-118 | v77 | heliosli slot 0.6 R6 + flip + 0.4 plain R7 | submitted 15:03 local; score pending (~7.2 h) |
