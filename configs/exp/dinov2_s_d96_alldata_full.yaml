@@ -1,0 +1,58 @@
+# EXP-122 — DINOv2-S v2 after EXP-120 (gold 0.841, still rising at epoch 10 -> under-trained): whole encoder trained
+# (no frozen blocks), backbone LR 3e-5 (mult 0.03), 20 epochs; everything else as EXP-120. Gate: gold-58 vs EXP-065 (0.914).
+exp_name: dinov2_s_d96_alldata_full
+paths:
+  cache_dir: ${paths.processed_data}/cache_384_d96
+preprocess:
+  res: 384
+  crop_mm: 140
+  span: [0.02, 0.98]
+  clip_percentiles: [2, 98]
+  canonical: false
+  slots:
+    sag_fluid: {plane: Sagittal, fluid: 1, n: 26}
+    sag_2nd: {plane: Sagittal, fluid: 0, n: 22}
+    cor_fluid: {plane: Coronal, fluid: 1, n: 18}
+    cor_2nd: {plane: Coronal, fluid: 0, n: 12}
+    axial: {plane: Axial, fluid: -1, n: 18}
+model:
+  backbone: vit_small_patch14_dinov2.lvd142m
+  img_size: 336
+  head: tanh_mil
+  slot_embedding: false
+  drop_rate: 0.2
+  drop_path_rate: 0.1
+  grad_checkpointing: true
+  channels_last: false
+windows:
+  k_train: 12
+  k_eval: 0
+  k_val: 24
+  sampling: uniform
+  cross_slot: true
+augmentation:
+  preset: gain_only
+  window_dropout: 0.0
+training:
+  batch_size: 8
+  accumulate_grad_batches: 2
+  num_epochs: 20
+  lr: 1.0e-3                       # head (pilkwang LR_HEAD)
+  backbone_lr_mult: 0.03           # backbone 3e-5
+  weight_decay: 0.05
+  schedule: onecycle
+  pct_start: 0.1
+  loss: bce_posweight
+  gradient_clip_val: 3.0
+  precision: bf16-mixed
+  ema: 0.0
+  top_k_average: 3
+  top_k_mode: best
+  val_every: 1
+labels:
+  sources:
+    - llm_labels_v4_blend.csv
+    - llm_labels_full.csv
+    - report_labels_v2.csv
+    - HYBRID_labels_scores.csv
+  weights: [1, 1, 1, 2]

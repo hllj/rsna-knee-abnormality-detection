@@ -23,7 +23,7 @@ NW=$(( $(nproc) / 2 > 16 ? 16 : $(nproc) / 2 ))   # two trainings share the CPU
     | sha256sum -c - || log "RadImageNet sha256 MISMATCH"
 }
 
-fetch cache_384_d96 rsna-knee-cache-r96-p0 rsna-knee-cache-r96-p1 rsna-knee-cache-r96-p2 rsna-knee-cache-r96-p3 \
+[ "${RUN_ONLY:-0}" = 1 ] || fetch cache_384_d96 rsna-knee-cache-r96-p0 rsna-knee-cache-r96-p1 rsna-knee-cache-r96-p2 rsna-knee-cache-r96-p3 \
   rsna-knee-cache-r96-p4
 
 run() {  # $1 GPU, $2 config, $3 Kaggle model slug, $4 EXP id
@@ -46,6 +46,8 @@ run() {  # $1 GPU, $2 config, $3 Kaggle model slug, $4 EXP id
     log "$name FAILED"
   fi
 }
+
+[ "${RUN_ONLY:-0}" = 1 ] && return 0   # sourced by iter13b_dinov2_full.sh for run()
 
 run 0 dinov2_s_d96_alldata rsna-knee-dinov2-s-d96 EXP-120 &
 sleep 120   # stagger the two dataloader warm-ups
