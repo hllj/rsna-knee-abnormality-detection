@@ -40,6 +40,6 @@ Flip TTA gives a small real gain → **pick 1 = EXP-113** (full-test run 5 h 15 
 | EXP | Notebook | Change vs EXP-113 | Status |
 |---|---|---|---|
 | EXP-117 | v76 | R6 + flip TTA in place of R7 + flip | **0.957** (submitted 14:33, scored 19:49 local, 5 h 16 min) |
-| EXP-118 | v77 | heliosli slot 0.6 R6 + flip + 0.4 plain R7 | submitted 15:03 local; score pending (~7.2 h) |
+| EXP-118 | v77 | heliosli slot 0.6 R6 + flip + 0.4 plain R7 | **0.957** (submitted 15:03, scored 22:19 local, 7 h 16 min) |
 
 **Update 10-16 ~20:00 (owner, Kaggle submissions page): EXP-117 and EXP-113 are the top two, above EXP-105.** Flip TTA on the heliosli model is a consistent small gain; R6 vs R7 roughly equal. Pick 1 -> EXP-117 (owner to confirm 117 vs 113 order); pick 2 = EXP-104. EXP-118 pending.
