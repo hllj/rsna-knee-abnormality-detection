@@ -25,3 +25,8 @@ all 0.957) and **EXP-104** (rule-safe, 0.943).
 - Recommendation: DINOv2-S first (no code, most different from our CoAtNet/ConvNeXt members, clearly rule-safe) → fold 0
   gate, then an all-data model for pick 2. Our own models have not lifted the OAI/R6 stack (EXP-094..096), so expect the
   gain in pick 2, not pick 1. Needs a GPU rental (owner OK).
+
+## Public-notebook research (10-17 ~01:00 local)
+- 426 notebooks scanned; best public claim still goodpjw LB 0.958 (heliosli per-finding weights + R6 flip). lavinwins "RSNA Gold Medal" = heliosli 0.958 copy (= EXP-119). goodpjw 10-17 update: R6 flip + S6 at 0.3 (second compact model; R7 as second model did not help us, EXP-118). farhanabid: old DINOv2/RadImageNet community bundle.
+- Unused public model: bliverrigpdoge knee-centred fine-spacing reader `rsna-knee-leg-r9all` (loop_R9_all.pt, 10-04); its notebooks score 0.956-0.957.
+- leoprovorov analysis: public half ~640 studies -> score SD ~0.003 from sampling alone, larger than the spread of the top 400 teams (0.0022); 940 teams print 0.956 from the same models; averaging stops helping as model errors correlate -> independent families (our DINOv2 / RadImageNet, EXP-120/121) are the remaining lever; public 0.957 vs 0.958 is mostly noise.
