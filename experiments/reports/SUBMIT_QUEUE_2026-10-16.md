@@ -2,16 +2,16 @@
 
 Base: EXP-105 (public 0.957, rank ~241/6,014): nartaa 0.65 x 384 + 0.35 x 224 vs heliosli R7, routed per finding
 (R7-side Lateral OA/PF OA/Lateral Meniscus/ACL; nartaa-side Effusion/Fracture/Medial Meniscus/Baker's; others 0.5).
-Final picks now: **EXP-105** (top score) and **EXP-104** (rule-safe, 0.943).
+Final picks now: **EXP-113** (top score) and **EXP-104** (rule-safe, 0.943).
 
 | EXP | Notebook | Change vs EXP-105 | Gold-58 | Status |
 |---|---|---|---|---|
-| EXP-113 | v72 | R7 + flip TTA | 0.9396 (EXP-105 0.9404) | submitted 10-15 14:43 (spare slot); score pending |
-| EXP-114 | v73 | lighter routing 0.6 / 0.4 | 0.9397 | smoke-tested; **submit 10-16** |
-| EXP-115 | v74 | 0.6 / 0.4 + R7 flip TTA | 0.9391 | smoke-tested; submit only if EXP-113 beats EXP-105 |
-| EXP-116 | v75 | flat 0.5 + R7 flip TTA (flip-only test vs EXP-103) | 0.9355 (EXP-103 0.9365) | smoke-tested; submit only if EXP-113 beats EXP-105 |
+| EXP-113 | v72 | R7 + flip TTA | 0.9396 (EXP-105 0.9404) | 0.957 (10-15); Kaggle page ranks it above EXP-105 |
+| EXP-114 | v73 | lighter routing 0.6 / 0.4 | 0.9397 | submitted 10-16 09:18 local; score pending |
+| EXP-115 | v74 | 0.6 / 0.4 + R7 flip TTA | 0.9391 | submitted 10-16 09:18 local; score pending (~5 h, flip) |
+| EXP-116 | v75 | flat 0.5 + R7 flip TTA (flip-only test vs EXP-103) | 0.9355 (EXP-103 0.9365) | dropped |
 
-Scheduled 07:04 local; the run checks EXP-113 first. At least one slot stays spare.
+The 07:04 scheduled run did not submit; re-run at 09:18 local submitted EXP-114 + EXP-115, 3 slots spare.
 
 **EXP-113 result (10-15 19:57 local): 0.957**, the same displayed score as EXP-105. Submit → score took 5 h 15 min (full
 test, including queue), matching the flip-TTA estimate. Our rank went 240 → 266 while other teams moved; a
