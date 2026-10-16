@@ -30,3 +30,16 @@ all 0.957) and **EXP-104** (rule-safe, 0.943).
 - 426 notebooks scanned; best public claim still goodpjw LB 0.958 (heliosli per-finding weights + R6 flip). lavinwins "RSNA Gold Medal" = heliosli 0.958 copy (= EXP-119). goodpjw 10-17 update: R6 flip + S6 at 0.3 (second compact model; R7 as second model did not help us, EXP-118). farhanabid: old DINOv2/RadImageNet community bundle.
 - Unused public model: bliverrigpdoge knee-centred fine-spacing reader `rsna-knee-leg-r9all` (loop_R9_all.pt, 10-04); its notebooks score 0.956-0.957.
 - leoprovorov analysis: public half ~640 studies -> score SD ~0.003 from sampling alone, larger than the spread of the top 400 teams (0.0022); 940 teams print 0.956 from the same models; averaging stops helping as model errors correlate -> independent families (our DINOv2 / RadImageNet, EXP-120/121) are the remaining lever; public 0.957 vs 0.958 is mostly noise.
+
+## ITER-13 new families (box 56274019, 2x RTX 3090, 2.16 h, ~$2.3; destroyed 10-16 19:12 UTC)
+All three trained on all data (fold -1) on cache_384_d96 and uploaded as Kaggle Models; none passes the gold-58 gate (EXP-065 0.914).
+
+| EXP | Model | Gold-58 | Rank corr with base | Gold blend with EXP-065+072 (base 0.9202), w = 0.05 / 0.1 / 0.2 |
+|---|---|---|---|---|
+| EXP-120 | DINOv2-S, last 6 blocks, 10 ep | 0.841 | 0.85 | 0.9187 / 0.9173 / 0.9145 |
+| EXP-121 | RadImageNet R50, full FT, 16 ep | 0.842 | 0.82 | 0.9195 / 0.9190 / 0.9143 |
+| EXP-122 | DINOv2-S, whole encoder, 20 ep | 0.864 | 0.90 | 0.9190 / 0.9178 / 0.9136 |
+| all three | equal mix | — | — | 0.9192 / 0.9178 / 0.9148 |
+
+Reading: every weight lowers the gold blend; the new families are ~0.05-0.07 weaker and not decorrelated enough to pay for it.
+Recommendation: keep picks EXP-117 / EXP-104 unchanged; no submission slots spent on these blends.
