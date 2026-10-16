@@ -8,7 +8,7 @@ Final picks now: **EXP-113** (top score) and **EXP-104** (rule-safe, 0.943).
 |---|---|---|---|---|
 | EXP-113 | v72 | R7 + flip TTA | 0.9396 (EXP-105 0.9404) | 0.957 (10-15); Kaggle page ranks it above EXP-105 |
 | EXP-114 | v73 | lighter routing 0.6 / 0.4 | 0.9397 | **0.957** (scored 12:39 local, ~3 h 20 min) |
-| EXP-115 | v74 | 0.6 / 0.4 + R7 flip TTA | 0.9391 | submitted 10-16 09:18 local; score pending (~5 h, flip) |
+| EXP-115 | v74 | 0.6 / 0.4 + R7 flip TTA | 0.9391 | **0.957** (scored 14:08 local, ~4 h 50 min) |
 | EXP-116 | v75 | flat 0.5 + R7 flip TTA (flip-only test vs EXP-103) | 0.9355 (EXP-103 0.9365) | dropped |
 
 The 07:04 scheduled run did not submit; re-run at 09:18 local submitted EXP-114 + EXP-115, 3 slots spare.
@@ -32,3 +32,5 @@ Flip TTA gives a small real gain → **pick 1 = EXP-113** (full-test run 5 h 15 
   is the full-test runtime.
 - Rule-safe: third 96-slice seed (EXP-112, `configs/exp/raptor_v2_d96_alldata_s3.yaml`) ready; renting needs owner OK
   (~$3–4).
+
+**10-16 results:** EXP-114 0.957, EXP-115 0.957: all four of EXP-105/113/114/115 show 0.957. Unrounded order on the Kaggle submissions page decides pick 1 (owner checks). Weight tuning stops here.
