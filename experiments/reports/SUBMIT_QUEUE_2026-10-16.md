@@ -7,7 +7,7 @@ Final picks now: **EXP-113** (top score) and **EXP-104** (rule-safe, 0.943).
 | EXP | Notebook | Change vs EXP-105 | Gold-58 | Status |
 |---|---|---|---|---|
 | EXP-113 | v72 | R7 + flip TTA | 0.9396 (EXP-105 0.9404) | 0.957 (10-15); Kaggle page ranks it above EXP-105 |
-| EXP-114 | v73 | lighter routing 0.6 / 0.4 | 0.9397 | submitted 10-16 09:18 local; score pending |
+| EXP-114 | v73 | lighter routing 0.6 / 0.4 | 0.9397 | **0.957** (scored 12:39 local, ~3 h 20 min) |
 | EXP-115 | v74 | 0.6 / 0.4 + R7 flip TTA | 0.9391 | submitted 10-16 09:18 local; score pending (~5 h, flip) |
 | EXP-116 | v75 | flat 0.5 + R7 flip TTA (flip-only test vs EXP-103) | 0.9355 (EXP-103 0.9365) | dropped |
 
