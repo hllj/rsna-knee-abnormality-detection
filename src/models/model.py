@@ -17,6 +17,37 @@ import torch.nn as nn
 
 from src.constants import NUM_LABELS
 
+# RadImageNet ResNet-50 (Lab-Rasool/RadImageNet ResNet50.pt) stores nn.Sequential(*resnet50.children()[:-2]):
+# backbone.0 conv1, .1 bn1, (.2 relu, .3 maxpool), .4-.7 layer1-4 -> timm resnet50 names
+_RADIMAGENET_PREFIX = {"backbone.0.": "conv1.", "backbone.1.": "bn1.", "backbone.4.": "layer1.",
+                       "backbone.5.": "layer2.", "backbone.6.": "layer3.", "backbone.7.": "layer4."}
+
+
+def load_backbone_weights(backbone: nn.Module, path: str) -> None:
+    """Load an external encoder checkpoint (RadImageNet layout or plain timm keys) into a timm backbone."""
+    sd = torch.load(path, map_location="cpu", weights_only=False)
+    sd = sd.state_dict() if hasattr(sd, "state_dict") else sd
+    out = {}
+    for k, v in sd.items():
+        for src, dst in _RADIMAGENET_PREFIX.items():
+            if k.startswith(src):
+                k = dst + k[len(src):]
+                break
+        out[k] = v
+    missing, unexpected = backbone.load_state_dict(out, strict=False)
+    missing = [k for k in missing if not k.startswith(("fc.", "head."))]
+    if missing or unexpected:
+        raise RuntimeError(f"pretrained_path {path}: missing {missing[:5]}, unexpected {unexpected[:5]}")
+
+
+def freeze_vit_except_last(backbone: nn.Module, n: int) -> None:
+    """Train only the last n transformer blocks and the final norm of a timm ViT (pilkwang's DINOv2 recipe)."""
+    for p in backbone.parameters():
+        p.requires_grad = False
+    for mod in list(backbone.blocks[-n:]) + [getattr(backbone, a) for a in ("norm", "fc_norm") if hasattr(backbone, a)]:
+        for p in mod.parameters():
+            p.requires_grad = True
+
 
 class AttentionMILHead(nn.Module):
     """Gated attention pooling with separate attention weights and classifier per finding."""
@@ -112,12 +143,18 @@ class KneeMILModel(nn.Module):
         grad_checkpointing: bool = False,
         img_size: Optional[int] = None,
         channels_last: bool = False,
+        pretrained_path: Optional[str] = None,
+        unfreeze_last: Optional[int] = None,
     ):
         super().__init__()
-        kw = dict(pretrained=pretrained, num_classes=0, drop_path_rate=drop_path_rate)
+        kw = dict(pretrained=pretrained and not pretrained_path, num_classes=0, drop_path_rate=drop_path_rate)
         if img_size is not None and any(t in backbone for t in ("vit", "dinov2", "eva", "deit")):
             kw["img_size"] = img_size  # ViTs need their pos-embed resized at build time
         self.backbone = timm.create_model(backbone, **kw)
+        if pretrained and pretrained_path:  # training only; inference loads our own checkpoint over it
+            load_backbone_weights(self.backbone, pretrained_path)
+        if unfreeze_last:
+            freeze_vit_except_last(self.backbone, int(unfreeze_last))
         if grad_checkpointing:
             self.backbone.set_grad_checkpointing(True)
         # NHWC layout: faster convolutions with AMP on tensor-core GPUs (Ampere+); numerically equivalent
@@ -169,4 +206,6 @@ def build_model(cfg, pretrained: Optional[bool] = None) -> KneeMILModel:
         grad_checkpointing=m.grad_checkpointing,
         img_size=m.img_size,
         channels_last=bool(m.get("channels_last", False)),
+        pretrained_path=m.get("pretrained_path"),
+        unfreeze_last=m.get("unfreeze_last"),
     )

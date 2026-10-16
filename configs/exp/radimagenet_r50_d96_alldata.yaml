@@ -1,0 +1,61 @@
+# EXP-121 — new family for the final blends: RadImageNet ResNet-50 (medical pretraining; HF Lab-Rasool/RadImageNet, MIT,
+# Kaggle shigechan/radimagenet-resnet50-official) on the 96-slice corpus (raptor_v2_d96_alldata geometry, cache, windows,
+# labels and best-3-by-gold selection), full fine-tune at the native 384 px. All data (fold=-1).
+# Weights: put ResNet50.pt at ${paths.data_dir}/pretrained/radimagenet_resnet50.pt. Gate: gold-58 vs EXP-065 (0.914).
+exp_name: radimagenet_r50_d96_alldata
+paths:
+  cache_dir: ${paths.processed_data}/cache_384_d96
+preprocess:
+  res: 384
+  crop_mm: 140
+  span: [0.02, 0.98]
+  clip_percentiles: [2, 98]
+  canonical: false
+  slots:
+    sag_fluid: {plane: Sagittal, fluid: 1, n: 26}
+    sag_2nd: {plane: Sagittal, fluid: 0, n: 22}
+    cor_fluid: {plane: Coronal, fluid: 1, n: 18}
+    cor_2nd: {plane: Coronal, fluid: 0, n: 12}
+    axial: {plane: Axial, fluid: -1, n: 18}
+model:
+  backbone: resnet50
+  pretrained_path: ${paths.data_dir}/pretrained/radimagenet_resnet50.pt
+  img_size: 384
+  head: tanh_mil
+  slot_embedding: false
+  drop_rate: 0.2
+  drop_path_rate: 0.05
+  grad_checkpointing: true
+  channels_last: true
+windows:
+  k_train: 12
+  k_eval: 0
+  k_val: 24
+  sampling: uniform
+  cross_slot: true
+augmentation:
+  preset: gain_only
+  window_dropout: 0.0
+training:
+  batch_size: 8
+  accumulate_grad_batches: 2
+  num_epochs: 16
+  lr: 1.0e-3                       # head
+  backbone_lr_mult: 0.1            # backbone 1e-4: full fine-tune of a medical-pretrained CNN
+  weight_decay: 0.05
+  schedule: onecycle
+  pct_start: 0.15
+  loss: bce_posweight
+  gradient_clip_val: 3.0
+  precision: bf16-mixed
+  ema: 0.0
+  top_k_average: 3
+  top_k_mode: best
+  val_every: 1
+labels:
+  sources:
+    - llm_labels_v4_blend.csv
+    - llm_labels_full.csv
+    - report_labels_v2.csv
+    - HYBRID_labels_scores.csv
+  weights: [1, 1, 1, 2]

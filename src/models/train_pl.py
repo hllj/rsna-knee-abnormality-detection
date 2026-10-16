@@ -84,8 +84,9 @@ class KneeModule(L.LightningModule):
 
     def configure_optimizers(self):
         t = self.cfg.training
-        bb = [p for n, p in self.model.named_parameters() if n.startswith("backbone.")]
-        rest = [p for n, p in self.model.named_parameters() if not n.startswith("backbone.")]
+        params = [(n, p) for n, p in self.model.named_parameters() if p.requires_grad]  # model.unfreeze_last freezes some
+        bb = [p for n, p in params if n.startswith("backbone.")]
+        rest = [p for n, p in params if not n.startswith("backbone.")]
         opt = torch.optim.AdamW(
             [{"params": bb, "lr": t.lr * t.backbone_lr_mult}, {"params": rest, "lr": t.lr}],
             weight_decay=t.weight_decay,

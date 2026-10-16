@@ -97,6 +97,8 @@ model:
   slot_embedding: true
   grad_checkpointing: false
   channels_last: false             # NHWC layout for CNNs on Ampere+ GPUs (speed only)
+  pretrained_path: null            # external encoder weights loaded at training start (e.g. RadImageNet ResNet-50)
+  unfreeze_last: null              # ViTs: train only the last N transformer blocks (+ final norm)
 
 # 2.5D windows (3 adjacent slices -> RGB) sampled per study
 windows:

@@ -1,0 +1,61 @@
+# EXP-120 — new family for the final blends: DINOv2 ViT-S/14 on the 96-slice corpus (raptor_v2_d96_alldata geometry, cache,
+# windows, labels and best-3-by-gold selection), pilkwang's public DINOv2 recipe for the encoder: 336 px (24 x 24 patches),
+# only the last 6 transformer blocks trained, backbone LR 8e-6 vs head 1e-3, 10 epochs. All data (fold=-1).
+# Cache: cache_384_d96 (resized 384 -> 336 on the fly). Gate: gold-58 vs EXP-065 (0.914).
+exp_name: dinov2_s_d96_alldata
+paths:
+  cache_dir: ${paths.processed_data}/cache_384_d96
+preprocess:
+  res: 384
+  crop_mm: 140
+  span: [0.02, 0.98]
+  clip_percentiles: [2, 98]
+  canonical: false
+  slots:
+    sag_fluid: {plane: Sagittal, fluid: 1, n: 26}
+    sag_2nd: {plane: Sagittal, fluid: 0, n: 22}
+    cor_fluid: {plane: Coronal, fluid: 1, n: 18}
+    cor_2nd: {plane: Coronal, fluid: 0, n: 12}
+    axial: {plane: Axial, fluid: -1, n: 18}
+model:
+  backbone: vit_small_patch14_dinov2.lvd142m
+  img_size: 336
+  unfreeze_last: 6                 # pilkwang UNFREEZE_LAST = 6
+  head: tanh_mil
+  slot_embedding: false
+  drop_rate: 0.2
+  drop_path_rate: 0.1
+  grad_checkpointing: true
+  channels_last: false
+windows:
+  k_train: 12
+  k_eval: 0
+  k_val: 24
+  sampling: uniform
+  cross_slot: true
+augmentation:
+  preset: gain_only
+  window_dropout: 0.0
+training:
+  batch_size: 8
+  accumulate_grad_batches: 2
+  num_epochs: 10                   # pilkwang EPOCHS = 10
+  lr: 1.0e-3                       # head (pilkwang LR_HEAD)
+  backbone_lr_mult: 0.008          # backbone 8e-6 (pilkwang LR_BACKBONE)
+  weight_decay: 0.05
+  schedule: onecycle
+  pct_start: 0.15
+  loss: bce_posweight
+  gradient_clip_val: 3.0
+  precision: bf16-mixed
+  ema: 0.0
+  top_k_average: 3
+  top_k_mode: best
+  val_every: 1
+labels:
+  sources:
+    - llm_labels_v4_blend.csv
+    - llm_labels_full.csv
+    - report_labels_v2.csv
+    - HYBRID_labels_scores.csv
+  weights: [1, 1, 1, 2]
