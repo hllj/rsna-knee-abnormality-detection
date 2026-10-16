@@ -44,4 +44,4 @@ Flip TTA gives a small real gain → **pick 1 = EXP-113** (full-test run 5 h 15 
 
 **Update 10-16 ~20:00 (owner, Kaggle submissions page): EXP-117 and EXP-113 are the top two, above EXP-105.** Flip TTA on the heliosli model is a consistent small gain; R6 vs R7 roughly equal. Pick 1 -> EXP-117 (owner to confirm 117 vs 113 order); pick 2 = EXP-104. EXP-118 pending.
 
-**Update 10-16 ~22:30 (owner, Kaggle submissions page): top two are EXP-117 and EXP-118**, then EXP-113, EXP-105. R6 + flip TTA is the best heliosli model; adding R7 (EXP-118) does not move it above EXP-117 and costs 2 h more. **Pick 1 = EXP-117** (5 h 16 min), pick 2 = EXP-104 (rule-safe 0.943).
+**Update 10-16 ~22:30 (owner, Kaggle submissions page): order EXP-117 > EXP-118 > EXP-113 > EXP-105** (EXP-117 #1). R6 + flip TTA is the best heliosli model; adding R7 (EXP-118) does not move it above EXP-117 and costs 2 h more. **Pick 1 = EXP-117** (5 h 16 min), pick 2 = EXP-104 (rule-safe 0.943).
