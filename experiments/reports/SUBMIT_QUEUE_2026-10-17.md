@@ -43,3 +43,19 @@ All three trained on all data (fold -1) on cache_384_d96 and uploaded as Kaggle 
 
 Reading: every weight lowers the gold blend; the new families are ~0.05-0.07 weaker and not decorrelated enough to pay for it.
 Recommendation: keep picks EXP-117 / EXP-104 unchanged; no submission slots spent on these blends.
+
+## Public-notebook scan (10-17 ~10:00 local)
+- **heliosli V2** (`this-is-best-public-dataset-new-version-0-9576`, 10-16 19:05): same nartaa 384 + 224 (A224 0.35) vs R6 + flip TTA, but
+  sharper per-finding nartaa weights (Synovitis 0.85, Lateral OA 0.15, PF OA 0.65, Baker's 0.30, Medial OA and the other 7 0.5) and
+  goodpjw's 2.5D reader (3 public folds) rank-blended on the final submission at goodpjw's v11 per-finding weights
+  (Baker's 0.035, Contusion 0.03, Medial OA / ACL 0.025, Medial Meniscus / MCL 0.02, Lateral Meniscus / Fracture / Lateral OA / PF OA 0.008,
+  Effusion 0.004, Synovitis 0.003). → **EXP-123** (our fusion: nartaa = wr(1−g), R6 = (1−wr)(1−g), goodpjw = g).
+- lavinwins `top-1-gold` (10-17) = heliosli's 0.958 recipe (= EXP-119).
+- goodpjw R6 + S6 (10-17): 0.957 vs 0.958 without S6 → negative, not applied.
+- lavinwins `rsna-gold-medal` now a "v6 combination layer" on the 0.943 public pipeline (rank-fix for A5 subpopulation blend,
+  per-target routing); claims 0.943 → 0.945, different model stack from our pick 2 (EXP-104) → not applied.
+
+| EXP | Notebook | Change vs EXP-117 | Status |
+|---|---|---|---|
+| EXP-119 | v78 | heliosli 0.958 per-finding weights | smoke-tested; submit blocked pending owner OK |
+| EXP-123 | v79 | heliosli V2 (sharper weights + goodpjw reader v11) | smoke-tested (COMPLETE, fusion weights verified in log); awaiting owner OK to submit |
