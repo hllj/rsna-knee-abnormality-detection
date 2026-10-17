@@ -57,5 +57,25 @@ Recommendation: keep picks EXP-117 / EXP-104 unchanged; no submission slots spen
 
 | EXP | Notebook | Change vs EXP-117 | Status |
 |---|---|---|---|
-| EXP-119 | v78 | heliosli 0.958 per-finding weights | smoke-tested; submit blocked pending owner OK |
-| EXP-123 | v79 | heliosli V2 (sharper weights + goodpjw reader v11) | smoke-tested (COMPLETE, fusion weights verified in log); awaiting owner OK to submit |
+| EXP-119 | v78 | heliosli 0.958 per-finding weights | submitted 10-17 10:43 local |
+| EXP-123 | v79 | heliosli V2 (sharper weights + goodpjw reader v11) | submitted 10-17 10:43 local |
+
+## Our routing on top of heliosli's weights (owner request 10-17 ~11:00 local)
+Union recipe: heliosli's weights where they leave 0.5 (Lateral OA, PF OA, Synovitis, Baker's), our EXP-117 routing on the
+findings heliosli keeps at 0.5 (nartaa 0.35 on ACL / Lateral Meniscus, 0.65 on Medial Meniscus / Effusion / Fracture).
+On PF OA and Baker's our routing and heliosli's point in opposite directions; heliosli's (LB-derived) are kept.
+
+Gold-58 sanity check (`gold_hybrid.py`; nartaa in-sample, R7 + flip stands in for R6, our routing chosen on these studies):
+
+| Recipe | Gold-58 macro | Note |
+|---|---|---|
+| all findings 0.5 | 0.935 | |
+| EXP-117 (ours) | 0.940 | routing fitted here |
+| EXP-119 / EXP-123 | 0.937 / 0.937 | |
+| EXP-124 = 123 + ours | 0.939 | +Lateral Meniscus, Effusion, Fracture, ACL |
+| EXP-125 = 119 + ours | 0.939 | same |
+
+| EXP | Notebook | Parent | Status |
+|---|---|---|---|
+| EXP-124 | v80 | EXP-123 + our routing | smoke-tested (COMPLETE, weights verified); awaiting owner OK |
+| EXP-125 | v81 | EXP-119 + our routing | smoke-tested (COMPLETE, weights verified); awaiting owner OK |
