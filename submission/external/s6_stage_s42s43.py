@@ -81,8 +81,8 @@ BUNDLE = TMP / 'bundle'
 BUNDLE.mkdir(exist_ok=True)
 
 # [s6] bundle assembled from the checkpoints' own datasets (nartaa S6fall geometry; make_s6_stage.py)
-S6_MODELS = [["rsna-knee-s6fall-weights", "E_prior_s42_fall.pt", "0c7297d58f061ab4e5d7c55046f51fa3e8934928046f0647a0c7854e98371c12"], ["rsna-knee-s6-cnx-s43", "E_prior_s43_fall.pt", "88b812333769311b880f7b76690b19df890e1b0571bada72a5a2f1e69dd1c126"]]
-manifest = {"bundle_id": "s6fall_s42s43", "arm": "E_prior", "models": ["E_prior_s42_fall.pt", "E_prior_s43_fall.pt"], "backbone": "convnext_small", "size": 320, "crop": 288, "eval_stride": 1, "views": "v4", "slices": 3, "phys_mm": 3.5, "anchor_weights_sha256": "5904dd16eb9a4fd7a1caf90ac977f8fe2ef364908598c23c209db3fe7fd1563e", "state_spec": null, "side_model": null, "models2": null}
+S6_MODELS = [['rsna-knee-s6fall-weights', 'E_prior_s42_fall.pt', '0c7297d58f061ab4e5d7c55046f51fa3e8934928046f0647a0c7854e98371c12'], ['rsna-knee-s6-cnx-s43', 'E_prior_s43_fall.pt', '88b812333769311b880f7b76690b19df890e1b0571bada72a5a2f1e69dd1c126']]
+manifest = {'bundle_id': 's6fall_s42s43', 'arm': 'E_prior', 'models': ['E_prior_s42_fall.pt', 'E_prior_s43_fall.pt'], 'backbone': 'convnext_small', 'size': 320, 'crop': 288, 'eval_stride': 1, 'views': 'v4', 'slices': 3, 'phys_mm': 3.5, 'anchor_weights_sha256': '5904dd16eb9a4fd7a1caf90ac977f8fe2ef364908598c23c209db3fe7fd1563e', 'state_spec': None, 'side_model': None, 'models2': None}
 M_SRC = None
 for _slug, _name, _digest in S6_MODELS:
     _src = find_mount(_slug, _name)

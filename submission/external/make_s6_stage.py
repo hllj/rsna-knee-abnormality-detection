@@ -31,8 +31,8 @@ def main():
                 "size": 320, "crop": 288, "eval_stride": 1, "views": "v4", "slices": 3, "phys_mm": 3.5,
                 "anchor_weights_sha256": ANATOMY_SHA, "state_spec": None, "side_model": None, "models2": None}
     new_assets = ("# [s6] bundle assembled from the checkpoints' own datasets (nartaa S6fall geometry; make_s6_stage.py)\n"
-                  "S6_MODELS = %s\n" % json.dumps(models) +
-                  "manifest = %s\n" % json.dumps(manifest) +
+                  "S6_MODELS = %r\n" % (models,) +
+                  "manifest = %r\n" % (manifest,) +          # Python literals (None), not JSON (null)
                   "M_SRC = None\n"
                   "for _slug, _name, _digest in S6_MODELS:\n"
                   "    _src = find_mount(_slug, _name)\n"
