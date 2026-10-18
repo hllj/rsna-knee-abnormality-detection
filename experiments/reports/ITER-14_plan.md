@@ -86,6 +86,13 @@ JPEG q95 error: MAE 0.68 grey levels, p99.9 4.4, max 12 → kept. Kaggle output 
 - EXP-127 = EXP-124 + S6fall s42 at 0.3 in the heliosli slot (`s6_stage_s42.py`); EXP-128 = same with s42 + s43
   (`s6_stage_s42s43.py`). Gold-58 cannot separate the share (0.939 for every m in 0-0.7). No time guard (owner: option 1 only).
 
+### Submissions
+| EXP | Notebook | What | Status |
+|---|---|---|---|
+| EXP-126 | v82 | EXP-124 + heliosli compact-v1 S6 0.3 | **timeout (> 9 h)** |
+| EXP-127 | v84 | EXP-124 + nartaa S6fall s42 0.3 (v83 failed: JSON `null` in the generated stage, fixed bed2ae1) | submitted 10-19 03:14 local |
+| EXP-128 | v85 | EXP-124 + S6 bundle s42 + our s43 0.3 (S6 output differs from EXP-127's by up to 0.11 → both seeds averaged) | submitted 10-19 03:31 local |
+
 ## Cost / time (superseded by the training plan above)
 3 runs (DINOv2 fold 0, DINOv2 all-data, ConvNeXt seed 43 all-data) on 3× RTX 3090: ~8-10 h each in parallel + ~2 h data
 and anchors → ~$12-15. **Not rented — awaiting owner OK.**
