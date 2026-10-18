@@ -1,0 +1,413 @@
+--- /home/danial/rsna-knee/research/gap-hunt-20261008/exec/S6F0/heliosli/compact_train.py	2026-10-09 19:34:01.134259580 +0300
++++ /home/danial/rsna-knee/research/gap-hunt-20261008/exec/S6F0_ALL/train_s6f0_all.py	2026-10-11 05:38:49.231940062 +0300
+@@ -1,4 +1,34 @@
+-"""Compact fine-tuned image model on the per-slice pixel cache.  The user authorised fine-tuning a compact model on 2026-10-05 evening
++"""S6F0 trainer = a COPY of Heliosli's compact_train.py (sha256 14767c7a..., S6F0/heliosli/compact_train.py), patched for the
++fold-0 S6-architecture rebuild on the laptop.  Authorisation: Danial 2026-10-10 13:2x Amman, "go ahead with the fold-0 run on the
++laptop".  All code above main() (LABELS, window_rows, Studies, collate, Net, losses) is byte-identical to the original, so the
++saved model loads unchanged in Heliosli's compact_infer.py.  `diff S6F0/heliosli/compact_train.py S6F0/train_s6f0.py` shows every
++patch; each is tagged "S6F0".  The patches:
++  P1 data: --px optional; without it the studies come from fly_data.FlyStudies (DICOM -> lean native.prepare -> px_cache v4 build
++     with precomputed anchors, per study, in tmpfs), and `done` = the frozen pool (--pool, from the anchor precompute)
++  P2 folds: pool_fold from --folds-json (folds_v0.json) instead of sha1(uid) % K; --expect-train/--expect-holdout assert the counts
++  P3 bias0 (the class-bias init) = logit(mean prior over the fold's TRAINING studies), not the whole pool (it included fold 0)
++  P4 loader: collate drops studies that failed to render; all-failed batches are skipped; DataLoader timeout; failures are
++     counted per epoch and the run aborts above --max-fail-frac
++  P5 logging: a progress line every --log-every steps and an epoch line with loss, windows/s, peak VRAM, host RSS and ETA (Amman)
++  P6 checkpoint after EVERY epoch including the last, never deleted; final model written atomically, then a DONE marker; a restart
++     with the marker present exits 0 at once.  Review fix 10-10: checkpoint and model are fsynced before the rename, the previous
++     checkpoint is kept as <ckpt>.prev, and a resume falls back to it when the latest checkpoint is unreadable
++  P7 --no-final-predict: no in-trainer predictions (the OOF comes from compact_infer, the inference path, in run_oof.sh)
++  P8 --train-subset (smokes only), --step-log (per-step losses, smokes only), --deterministic (smokes only: cudnn deterministic)
++
++ALLDATA (S6F0_ALL/train_s6f0_all.py) = a copy of S6F0/train_s6f0.py (sha256 6c0118fa...) for ONE model on all data.  Authorisation:
++Danial 2026-10-11 05:25 Amman, "yes to 1 and 2" (1 = train S6F0 on ALL data with the original recipe after LR arm 1) and "i give a go
++ahead for SKM-TEA anatomy network".  `diff S6F0/train_s6f0.py S6F0_ALL/train_s6f0_all.py` shows every hunk; each is tagged ALLDATA:
++  A1 s6common / fly_data / the heliosli copies are imported from the read-only S6F0 directory (this copy lives in S6F0_ALL)
++  A2 --all-data: the fold-0 iteration (--only-folds 0, so init, augmentation, sampler and loader streams equal the GO run's) trains on
++     EVERY pool study (pool_ok.json minus the 58 gold = 4,263, asserted) with nothing held out
++  A3 its files are tagged fall instead of f0 (models/E_prior_s42_fall.pt, DONE_E_prior_s42_fall.json, ckpt/E_prior_s42_fall.pt):
++     compact_infer and oof_step glob <arm>_s*_f*.pt, so it loads exactly like the fold-0 model, but can never be mistaken for it
++  A4 the DONE marker records all_data true
++Code above main() is still byte-identical (Net, deploy_state_dict, ...), so the model loads unchanged in compact_infer.py.
++
++Original docstring follows.
++Compact fine-tuned image model on the per-slice pixel cache.  The user authorised fine-tuning a compact model on 2026-10-05 evening
+ (the mainline OrthoFoundation training hold on the 5090 is untouched).  v1.1: fold models are saved.
+ 
+ Same contract as probe_train.py (so probe_eval.py and fuse_eval.py read its outputs unchanged):
+@@ -555,8 +585,31 @@
+ 
+ 
+ def main():
++    # ---- S6F0 P1: Heliosli's copies + cloud_code on sys.path, download_data stub, on-the-fly dataset
++    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
++    sys.path.insert(0, "/home/danial/rsna-knee/research/gap-hunt-20261008/exec/S6F0")   # ALLDATA A1: s6common / fly_data, read-only
++    import shutil
++    import s6common as SC
++    SC.install_paths()
++    import fly_data
+     ap = argparse.ArgumentParser()
+-    ap.add_argument("--px", required=True)
++    ap.add_argument("--px", default=None, help="S6F0: optional; without it the studies are rendered on the fly (fly_data.FlyStudies)")
++    ap.add_argument("--size", type=int, default=320, help="S6F0: px_cache render size of the on-the-fly rows")
++    ap.add_argument("--views", default="v4", help="S6F0: px_cache view set of the on-the-fly rows")
++    ap.add_argument("--anchors", default=SC.ANCHORS, help="S6F0: precomputed anchor directory (precompute_anchors.py)")
++    ap.add_argument("--pool", default=None, help="S6F0: frozen pool JSON (freeze_pool.py) = the studies that rendered in the precompute")
++    ap.add_argument("--folds-json", default=None, help="S6F0: folds_v0.json; pool_fold = its value (not sha1 %% K)")
++    ap.add_argument("--expect-train", type=int, default=0, help="S6F0: assert this many training studies in each trained fold")
++    ap.add_argument("--expect-holdout", type=int, default=0, help="S6F0: assert this many held-out studies in each trained fold")
++    ap.add_argument("--all-data", action="store_true", help="ALLDATA A2: the fold-0 iteration trains on every pool study, nothing held out")
++    ap.add_argument("--work-tmp", default="/tmp/s6f0_work", help="S6F0: tmpfs root of the per-study work dirs (wiped at start)")
++    ap.add_argument("--loader-timeout", type=float, default=600.0, help="S6F0: DataLoader timeout (s): a hung worker ends the process")
++    ap.add_argument("--max-fail-frac", type=float, default=0.005, help="S6F0: abort when more than this share of an epoch's studies fail")
++    ap.add_argument("--log-every", type=int, default=200, help="S6F0: progress line every N optimizer steps")
++    ap.add_argument("--no-final-predict", action="store_true", help="S6F0: skip the in-trainer gold/OOF predictions (run_oof.sh does them)")
++    ap.add_argument("--train-subset", default=None, help="S6F0 smokes only: JSON list; train only on these studies of the fold's training set")
++    ap.add_argument("--step-log", default=None, help="S6F0 smokes only: append one JSON line per optimizer step (epoch, step, loss, idx)")
++    ap.add_argument("--deterministic", action="store_true", help="S6F0 smokes only: cudnn deterministic, no benchmark (bit-exact resume test)")
+     ap.add_argument("--px-extra", default=None, help="add-on pixel cache (px_cache --views v2add) read next to --px; its windows join every study")
+     ap.add_argument("--px-override", default=None, help="override cache (sidefix): studies listed there are read from it instead of --px")
+     ap.add_argument("--targets", required=True)
+@@ -632,8 +685,20 @@
+     os.makedirs(a.out, exist_ok=True)
+     dev = torch.device("cpu") if a.check_targets else torch.device("cuda")
+     torch.backends.cudnn.benchmark = True
+-    index = json.load(open(os.path.join(a.px, "index.json"), encoding="utf-8"))
+-    done = {u for u, v in index["done"].items() if v[1] > 0}
++    if a.deterministic:                                  # S6F0 P8 (smokes): reproducible kernels for the bit-exact resume test
++        torch.backends.cudnn.benchmark = False
++        torch.backends.cudnn.deterministic = True
++    SC.verify_copies()
++    if a.px:
++        index = json.load(open(os.path.join(a.px, "index.json"), encoding="utf-8"))
++        done = {u for u, v in index["done"].items() if v[1] > 0}
++    else:                                                # S6F0 P1: the frozen pool replaces the px-cache index
++        if not a.pool:
++            raise SystemExit("S6F0: --pool (frozen pool JSON) is required without --px")
++        done = set(json.load(open(a.pool, encoding="utf-8")))
++        if not a.check_targets:
++            shutil.rmtree(a.work_tmp, ignore_errors=True)   # work dirs left by a killed run
++            os.makedirs(a.work_tmp, exist_ok=True)
+     rows = list(csv.DictReader(open(a.targets, encoding="utf-8")))
+     by_uid = {r["StudyInstanceUID"]: r for r in rows}
+     if a.extra:
+@@ -651,9 +716,24 @@
+     for u in gold:
+         assert all(by_uid[u][L + "|strict"] == "" and by_uid[u][L + "|prior"] == "" for L in LABELS)
+     K = a.folds
+-    pool_fold = np.array([int(hashlib.sha1(u.encode()).hexdigest()[:8], 16) % K for u in pool])
++    if a.folds_json:                                     # S6F0 P2: the fixed split every screen uses (folds_v0.json)
++        fj = json.load(open(a.folds_json, encoding="utf-8"))["folds"]
++        pool_fold = np.array([int(fj[u]) for u in pool])
++        assert ((pool_fold >= 0) & (pool_fold < K)).all(), "S6F0: a pool study has a folds_v0 value outside 0..K-1 (gold is -1)"
++    else:
++        pool_fold = np.array([int(hashlib.sha1(u.encode()).hexdigest()[:8], 16) % K for u in pool])
+     print("pool %d gold %d folds %s | non-gold studies with blanked report labels left out: %d" % (
+         len(pool), len(gold), np.bincount(pool_fold, minlength=K).tolist(), len(blanked & done)), flush=True)
++    if a.all_data:                                       # ALLDATA A2: refuse anything but one all-data model on the fold-0 streams
++        if a.only_folds != "0" or a.holdout_fold is not None or a.train_subset or a.reeval_run or not a.no_final_predict:
++            raise SystemExit("ALLDATA: --all-data needs --only-folds 0 and --no-final-predict, and excludes --holdout-fold / "
++                             "--train-subset / --reeval-run")
++        if set(pool) != done - set(gold) or not a.expect_train or len(pool) != a.expect_train or a.expect_holdout != 0:
++            raise SystemExit("ALLDATA: pool %d studies, pool file minus gold %d, --expect-train %d, --expect-holdout %d: every "
++                             "non-gold study of --pool must train and nothing may be held out" % (
++                                 len(pool), len(done - set(gold)), a.expect_train, a.expect_holdout))
++        print("ALLDATA: train %d (every study of --pool %d minus gold %d; folds %s all trained), held out 0, gold in training 0" % (
++            len(pool), len(done), len(gold), np.bincount(pool_fold, minlength=K).tolist()), flush=True)
+ 
+     def col(uids, suffix, default):
+         out = np.full((len(uids), C), default, np.float32)
+@@ -686,6 +766,10 @@
+         return kind, t, torch.ones_like(t)
+ 
+     bias0 = torch.logit(col(pool, "prior", float("nan")).mean(0).clamp(1e-3, 1 - 1e-3))
++    prior_pool = col(pool, "prior", float("nan"))
++
++    def bias0_of(rows_idx):                              # S6F0 P3: class-bias init from the fold's training studies only
++        return torch.logit(prior_pool[torch.as_tensor(rows_idx, device=prior_pool.device)].mean(0).clamp(1e-3, 1 - 1e-3))
+ 
+     state_spec = None
+     if a.state_targets:
+@@ -887,6 +971,23 @@
+         return torch.tensor(w, dtype=torch.double)
+ 
+     def make_loader(uids, mode, seed, shuffle):
++        if a.px is None:                            # S6F0 P1/P4: on-the-fly rows, failed studies dropped by the collate
++            if a.extent or a.px_extra or a.px_override:
++                raise SystemExit("S6F0: --extent / --px-extra / --px-override need the px cache")
++            ds = fly_data.FlyStudies(uids, a.train_windows, mode, seed, eval_stride=a.eval_stride, train_sampling=a.train_sampling,
++                                     cover_stride=a.cover_stride, slices=a.slices,
++                                     slice_jitter=a.slice_jitter if mode == "train" else 0.0, phys_mm=a.phys_mm, size=a.size,
++                                     views=a.views, anchors=a.anchors, tmp=a.work_tmp,
++                                     failures=os.path.join(a.out, "failures.jsonl"))
++            train = mode == "train"
++            if train and (a.rare_boost or a.pair_rank > 0):
++                raise SystemExit("S6F0: --rare-boost / --pair-rank are not wired to the on-the-fly loader")
++            nw = a.workers if train else min(a.workers, a.eval_workers)
++            return ds, torch.utils.data.DataLoader(ds, batch_size=a.batch if train else 1, shuffle=shuffle, sampler=None,
++                                                   num_workers=nw, collate_fn=fly_data.collate_fly, drop_last=train,
++                                                   persistent_workers=False, pin_memory=train, prefetch_factor=2 if train else 1,
++                                                   generator=torch.Generator().manual_seed(seed),
++                                                   timeout=a.loader_timeout if nw > 0 else 0)
+         ds = Studies(a.px, uids, a.train_windows, mode, seed, eval_stride=a.eval_stride,
+                      train_sampling=a.train_sampling, cover_stride=a.cover_stride, px_extra=a.px_extra, slices=a.slices,
+                      slice_jitter=a.slice_jitter if mode == "train" else 0.0, phys_mm=a.phys_mm, px_override=a.px_override,
+@@ -959,7 +1060,10 @@
+         model.eval()
+         ds, dl = make_loader(uids, "eval", seed, False)
+         out = torch.zeros((len(uids), C), device=dev)
+-        for img, meta, mask, idx in dl:
++        for batch in dl:
++            img, meta, mask, idx = batch[:4]
++            if img is None:                          # S6F0 P4: a study that failed to render must not score as zeros
++                raise SystemExit("S6F0: a study failed to render during predict (see failures.jsonl)")
+             with torch.autocast("cuda", dtype=torch.bfloat16):
+                 z = model(center(img.to(dev, non_blocking=True)), meta.to(dev), mask.to(dev), chunk=PREDICT_CHUNK)
+             out[idx.to(dev)] = z.float()
+@@ -1065,6 +1169,27 @@
+                 continue
+             tr = np.flatnonzero((pool_fold != k) & (pool_fold != H)) if H is not None else np.flatnonzero(pool_fold != k)
+             ho = np.flatnonzero(pool_fold == k)
++            if a.all_data:                               # ALLDATA A2: every pool study trains (sorted pool order), nothing held out
++                tr, ho = np.arange(len(pool), dtype=np.int64), np.zeros(0, dtype=np.int64)
++                assert len(tr) == a.expect_train and len(ho) == 0 and not ({pool[i] for i in tr} & set(gold))
++            fk = "all" if a.all_data else str(k)         # ALLDATA A3: file tag f<k> -> fall (both match <arm>_s*_f*.pt)
++            # ---- S6F0 P2/P6/P8: split checks, finished-fold skip, smoke subset
++            if a.expect_train and len(tr) != a.expect_train:
++                raise SystemExit("S6F0: fold %d has %d training studies, expected %d" % (k, len(tr), a.expect_train))
++            if a.expect_holdout and len(ho) != a.expect_holdout:
++                raise SystemExit("S6F0: fold %d has %d held-out studies, expected %d" % (k, len(ho), a.expect_holdout))
++            model_path = os.path.join(a.out, "models", "%s_s%d_f%s.pt" % (arm, seed, fk))     # ALLDATA A3: f%d -> f%s
++            done_path = os.path.join(a.out, "DONE_%s_s%d_f%s.json" % (arm, seed, fk))         # ALLDATA A3: f%d -> f%s
++            if a.no_final_predict and os.path.exists(done_path) and os.path.exists(model_path):
++                print("  S6F0: %s seed %d fold %d already finished (%s): nothing to do" % (arm, seed, k, done_path), flush=True)
++                continue
++            if a.train_subset:
++                keep = set(json.load(open(a.train_subset, encoding="utf-8")))
++                tr = np.array([i for i in tr if pool[i] in keep], dtype=np.int64)
++                if len(tr) != len(keep):
++                    raise SystemExit("S6F0: --train-subset has studies outside fold %d's training set" % k)
++            print("  S6F0 fold %d: %d training studies (folds %s), %d held out; first training ids %s" % (
++                k, len(tr), sorted(set(pool_fold[tr].tolist())), len(ho), [pool[i][-8:] for i in tr[:3]]), flush=True)
+             torch.manual_seed(1000 + 17 * seed)          # same init for every fold: heads start identical, so fold models can be souped
+             gen = torch.Generator().manual_seed(5000 + 17 * seed + k)
+             model = Net(a.backbone, a.init, freeze_blocks=a.freeze_blocks, crop=a.crop, state_spec=state_spec, in_chans=a.slices, spatial=a.spatial_attn, extent=a.extent).to(dev).to(memory_format=torch.channels_last)
+@@ -1076,7 +1201,7 @@
+                 _dynamo.config.cache_size_limit = max(32, _dynamo.config.cache_size_limit)
+                 model.enc.compile(dynamic=True)
+             with torch.no_grad():
+-                model.bias.copy_(bias0)
++                model.bias.copy_(bias0_of(tr))           # S6F0 P3: was bias0 (whole pool, held-out fold included)
+             enc = [p for n, p in model.named_parameters() if n.startswith("enc.") and p.requires_grad]
+             head = [p for n, p in model.named_parameters() if not n.startswith("enc.")]
+             groups = [{"params": enc, "lr": a.lr}]
+@@ -1095,7 +1220,7 @@
+                     groups.append({"params": top, "lr": a.lr})
+                 if bottom:
+                     groups.append({"params": bottom, "lr": a.lr * (a.llrd ** nb)})
+-            if k == (sorted(only)[0] if only else 0) and seed == 0:
++            if k == (sorted(only)[0] if only else 0) and seed == a.seed_base:     # S6F0: was seed == 0
+                 print("trainable encoder params %.1fM, head params %.2fM, frozen encoder params %.1fM" % (
+                     sum(p.numel() for p in enc) / 1e6, sum(p.numel() for p in head) / 1e6,
+                     sum(p.numel() for n, p in model.named_parameters() if n.startswith("enc.") and not p.requires_grad) / 1e6), flush=True)
+@@ -1112,10 +1237,26 @@
+             log = []
+             # resumable state, written atomically at the end of every --ckpt-every epochs: weights, optimizer, LR schedule, EMA,
+             # and every random stream that decides the next epoch (augmentation, sampler, loader, CPU and GPU global streams)
+-            ckpt_path = os.path.join(a.out, "ckpt", "%s_s%d_f%d.pt" % (arm, seed, k))
++            ckpt_path = os.path.join(a.out, "ckpt", "%s_s%d_f%s.pt" % (arm, seed, fk))      # ALLDATA A3: f%d -> f%s
+             start_ep = 0
+-            if a.resume and os.path.exists(ckpt_path):
+-                ck = torch.load(ckpt_path, map_location="cpu", weights_only=False)
++            if a.resume and (os.path.exists(ckpt_path) or os.path.exists(ckpt_path + ".prev")):
++                # S6F0 (review fix 10-10): fall back to the previous epoch's checkpoint if the latest one is unreadable (power loss)
++                ck = None
++                for cand in (ckpt_path, ckpt_path + ".prev"):
++                    if not os.path.exists(cand):
++                        continue
++                    try:
++                        ck = torch.load(cand, map_location="cpu", weights_only=False)
++                    except Exception as e_:
++                        print("  S6F0 WARNING: checkpoint %s is unreadable (%s: %s)" % (cand, type(e_).__name__, e_), flush=True)
++                        if cand == ckpt_path and os.path.exists(ckpt_path + ".prev"):
++                            os.replace(ckpt_path, ckpt_path + ".corrupt")     # keep it for inspection; the next save must not rotate it into .prev
++                        continue
++                    if cand != ckpt_path:
++                        print("  S6F0: resuming from the previous checkpoint %s" % cand, flush=True)
++                    break
++                if ck is None:
++                    raise SystemExit("S6F0: no readable checkpoint (%s, %s.prev)" % (ckpt_path, ckpt_path))
+                 if ck.get("epochs") != a.epochs or ck.get("train_studies") != len(tr):
+                     raise SystemExit("checkpoint %s does not match this run (epochs / training set)" % ckpt_path)
+                 model.load_state_dict(ck["model"])
+@@ -1133,13 +1274,29 @@
+                 log = list(ck["log"])
+                 start_ep = int(ck["epoch"]) + 1
+                 print("  resumed %s seed %d fold %d after epoch %d (%s)" % (arm, seed, k, ck["epoch"], ckpt_path), flush=True)
++            fly = a.px is None                           # S6F0 P4/P5: failure accounting and progress / epoch logging
++            ep_secs = []
+             for ep in range(start_ep, a.epochs):
+                 ds.epoch = ep
+                 model.train()
+                 tot = n = 0
+                 pr_batches = pr_terms = 0
+                 ext_acc = torch.zeros(6, device=dev)
+-                for img, meta, mask, idx in dl:
++                n_fail = n_skip = n_win = n_steps = 0
++                wait_s, t_ep = 0.0, time.time()
++                t_get, t_mark, win_mark = t_ep, t_ep, 0
++                torch.cuda.reset_peak_memory_stats()
++                for batch in dl:
++                    wait_s += time.time() - t_get
++                    if fly:
++                        img, meta, mask, idx, n_bad = batch
++                        n_fail += n_bad
++                        if img is None:                  # every study of the batch failed to render: skip the batch
++                            n_skip += 1
++                            t_get = time.time()
++                            continue
++                    else:
++                        img, meta, mask, idx = batch
+                     sel = tr_t[idx.to(dev)]
+                     with torch.autocast("cuda", dtype=torch.bfloat16):
+                         z, sl, bl = model(augment(img.to(dev, non_blocking=True), gen), meta.to(dev), mask.to(dev), return_aux=True)
+@@ -1174,10 +1331,47 @@
+                             for n_, p_ in model.named_parameters():
+                                 if n_ in ema:
+                                     ema[n_].mul_(d_).add_(p_.detach(), alpha=1 - d_)
+-                    tot += float(loss.detach()) * len(idx)
++                    loss_v = float(loss.detach())
++                    tot += loss_v * len(idx)
+                     n += len(idx)
++                    n_steps += 1                          # ---- S6F0 P5/P8
++                    n_win += int(mask.sum())
++                    if a.step_log:
++                        with open(a.step_log, "a", encoding="utf-8") as fh_:
++                            fh_.write(json.dumps({"epoch": ep, "step": n_steps, "loss": loss_v, "studies": [pool[tr[j]][-12:] for j in idx.tolist()],
++                                                  "windows": int(mask.sum()), "lr": sched.get_last_lr()[0], "t": round(time.time(), 3)}) + "\n")
++                    if a.log_every and n_steps % a.log_every == 0:
++                        now = time.time()
++                        rate = (n_win - win_mark) / max(1e-6, now - t_mark)
++                        left = (len(dl) - n_steps) * (now - t_ep) / n_steps + (a.epochs - ep - 1) * (
++                            (sum(ep_secs) / len(ep_secs)) if ep_secs else len(dl) * (now - t_ep) / n_steps)
++                        print("    %s step %d/%d  loss(run mean) %.4f  %.1f windows/s  loader wait %.0fs  failed %d  ETA fold end %s" % (
++                            SC.amman(), n_steps, len(dl), tot / max(1, n), rate, wait_s, n_fail, SC.amman(now + left)), flush=True)
++                        t_mark, win_mark = now, n_win
++                    t_get = time.time()
+                 log.append(round(tot / max(1, n), 5))
+                 print("  %s seed %d fold %d epoch %d loss %.4f  %.0fs" % (arm, seed, k, ep, log[-1], time.time() - t_arm), flush=True)
++                el = time.time() - t_ep
++                ep_secs.append(el)
++                mem = {}
++                try:
++                    for line_ in open("/proc/meminfo"):
++                        if line_.startswith(("MemAvailable", "SwapFree")):
++                            mem[line_.split(":")[0]] = int(line_.split()[1]) / 2 ** 20
++                    rss = int([l_ for l_ in open("/proc/self/status") if l_.startswith("VmRSS")][0].split()[1]) / 2 ** 20
++                except Exception:
++                    rss = float("nan")
++                eta = time.time() + (a.epochs - ep - 1) * (sum(ep_secs) / len(ep_secs))
++                print("  S6F0 %s epoch %d/%d done: loss %.4f | %d steps, %d studies, %d windows in %.0fs = %.1f windows/s (loader wait %.0fs) | "
++                      "failed studies %d, skipped batches %d | peak VRAM %.2f GiB alloc / %.2f GiB reserved | parent RSS %.1f GB, "
++                      "MemAvailable %.1f GB, SwapFree %.1f GB | lr enc %.2e | ETA fold end %s Amman" % (
++                          SC.amman(), ep + 1, a.epochs, log[-1], n_steps, n, n_win, el, n_win / max(el, 1e-6), wait_s, n_fail, n_skip,
++                          torch.cuda.max_memory_allocated() / 2 ** 30, torch.cuda.max_memory_reserved() / 2 ** 30, rss,
++                          mem.get("MemAvailable", float("nan")), mem.get("SwapFree", float("nan")), sched.get_last_lr()[0], SC.amman(eta)),
++                      flush=True)
++                if fly and n_fail > a.max_fail_frac * len(tr):   # abort BEFORE this epoch's checkpoint: a restart redoes the epoch
++                    raise SystemExit("S6F0: %d of %d studies failed to render in epoch %d (> %.2f%%); see %s" % (
++                        n_fail, len(tr), ep, 100 * a.max_fail_frac, os.path.join(a.out, "failures.jsonl")))
+                 if a.extent:
+                     ea = ext_acc.tolist()
+                     print("  extent epoch %d: auxiliary loss %.4f (weight %.2f) | gamma MOA/LOA/PFOA %s | mean log1p(A/100) on >= 1 cm^2 stated %.3f vs normal/low grade %.3f" % (
+@@ -1186,18 +1380,25 @@
+                         ea[0] / max(1.0, ea[1]), ea[2] / max(1.0, ea[3])), flush=True)
+                 if a.pair_rank > 0:
+                     print("  pair-rank epoch %d: %d of %d batches had at least one matched-pair term (%d class terms; includes base batches that happened to pair)" % (ep, pr_batches, len(dl), pr_terms), flush=True)
+-                if a.ckpt_every > 0 and (ep + 1) % a.ckpt_every == 0 and ep + 1 < a.epochs:
++                if a.ckpt_every > 0 and ((ep + 1) % a.ckpt_every == 0 or ep + 1 == a.epochs):   # S6F0 P6: the last epoch too
+                     os.makedirs(os.path.dirname(ckpt_path), exist_ok=True)
+                     sgen = getattr(dl.sampler, "generator", None) if isinstance(dl.sampler, torch.utils.data.WeightedRandomSampler) else None
+                     if isinstance(dl.batch_sampler, PairBatchSampler):
+                         sgen = dl.batch_sampler.generator
+-                    torch.save({"epoch": ep, "epochs": a.epochs, "train_studies": len(tr), "log": log,
+-                                "model": model.state_dict(), "opt": opt.state_dict(), "sched": sched.state_dict(),
+-                                "ema": None if ema is None else {n_: v.detach().cpu() for n_, v in ema.items()},
+-                                "gen": gen.get_state(), "sampler_gen": None if sgen is None else sgen.get_state(),
+-                                "loader_gen": None if dl.generator is None else dl.generator.get_state(),
+-                                "cpu_rng": torch.get_rng_state(), "cuda_rng": torch.cuda.get_rng_state_all()}, ckpt_path + ".tmp")
++                    # S6F0 (review fix 10-10): fsync the new file before the rename, keep the previous checkpoint as .prev, fsync the dir
++                    with open(ckpt_path + ".tmp", "wb") as fh_:
++                        torch.save({"epoch": ep, "epochs": a.epochs, "train_studies": len(tr), "log": log,
++                                    "model": model.state_dict(), "opt": opt.state_dict(), "sched": sched.state_dict(),
++                                    "ema": None if ema is None else {n_: v.detach().cpu() for n_, v in ema.items()},
++                                    "gen": gen.get_state(), "sampler_gen": None if sgen is None else sgen.get_state(),
++                                    "loader_gen": None if dl.generator is None else dl.generator.get_state(),
++                                    "cpu_rng": torch.get_rng_state(), "cuda_rng": torch.cuda.get_rng_state_all()}, fh_)
++                        fh_.flush()
++                        os.fsync(fh_.fileno())
++                    if os.path.exists(ckpt_path):
++                        os.replace(ckpt_path, ckpt_path + ".prev")
+                     os.replace(ckpt_path + ".tmp", ckpt_path)
++                    SC.fsync_dir(os.path.dirname(ckpt_path))
+                 if a.stop_after_epoch >= 0 and ep == a.stop_after_epoch:
+                     print("  stop-after-epoch %d: exiting (test)" % ep, flush=True)
+                     sys.exit(3)
+@@ -1214,18 +1415,33 @@
+                     print("  WARNING: BatchNorm backbone with --ema and no --bn-recal-batches: the saved model pairs EMA weights with "
+                           "the live weights' BatchNorm statistics (see the 10-08 CoAtNet screen)", flush=True)
+             os.makedirs(os.path.join(a.out, "models"), exist_ok=True)
+-            torch.save(model.deploy_state_dict(),
+-                       os.path.join(a.out, "models", "%s_s%d_f%d.pt" % (arm, seed, k)))
+-            if os.path.exists(ckpt_path):                 # the fold is complete: its resumable state is no longer needed
+-                os.remove(ckpt_path)
+-            z_gold += predict(model, gold, seed) / (K if H is None else K - 1)
++            with open(model_path + ".tmp", "wb") as fh_:                  # S6F0 P6: atomic + fsync (review fix 10-10); the checkpoint is kept
++                torch.save(model.deploy_state_dict(), fh_)
++                fh_.flush()
++                os.fsync(fh_.fileno())
++            os.replace(model_path + ".tmp", model_path)
++            SC.fsync_dir(os.path.dirname(model_path))
++            logs.append([log[0], log[-1]])
++            if a.no_final_predict:                       # S6F0 P6/P7: DONE marker, no in-trainer predictions
++                SC.atomic_json({"arm": arm, "seed": seed, "fold": k, "epochs": a.epochs, "train_studies": len(tr), "holdout_studies": len(ho),
++                                "all_data": bool(a.all_data), "file_tag": "f" + fk,           # ALLDATA A4
++                                "loss_per_epoch": log, "model": model_path, "model_sha256": SC.sha256_file(model_path),
++                                "optimizer_steps": int(sched.last_epoch), "ema": a.ema, "finished": SC.amman_now().isoformat(timespec="seconds"),
++                                "train_seconds_this_process": round(time.time() - t_arm, 1)}, done_path, indent=1)
++                print("  S6F0 %s fold %d finished: model %s, marker %s" % (SC.amman(), k, model_path, done_path), flush=True)
++                del model, opt
++                torch.cuda.empty_cache()
++                continue
++            n_models = (len(only) if only else K) - (1 if (H is not None and (only is None or H in only)) else 0)
++            z_gold += predict(model, gold, seed) / max(1, n_models)          # S6F0: was / K (z/5 with one trained fold)
+             z_pool[torch.from_numpy(ho).to(dev)] = predict(model, [pool[i] for i in ho], seed)
+             if H is not None:
+                 hh = np.flatnonzero(pool_fold == H)
+                 z_pool[torch.from_numpy(hh).to(dev)] += predict(model, [pool[i] for i in hh], seed) / (K - 1)
+-            logs.append([log[0], log[-1]])
+             del model, opt
+             torch.cuda.empty_cache()
++        if a.no_final_predict:                           # S6F0 P7: the OOF / gold predictions come from run_oof.sh
++            return
+         np.save(os.path.join(a.out, ("partial_" if only else "") + "oof_%s_s%d.npy" % (arm, seed)), z_pool.cpu().numpy().astype(np.float32))
+         out = {"arm": arm, "seed": seed, "epochs": a.epochs, "nested": False, "gold_uids": gold, "only_folds": sorted(only) if only else None,
+                "holdout_fold": H,
+@@ -1239,8 +1455,14 @@
+     cfg = {k: getattr(a, k) for k in vars(a)}
+     cfg.update({"pool_studies": len(pool), "gold_studies": len(gold), "feature_studies": len(done), "labels": LABELS,
+                 "scaffold": "compact fine-tuned image model on the pixel cache"})
+-    json.dump(cfg, open(os.path.join(a.out, "run_config.json"), "w"), indent=1)
+-    json.dump(pool, open(os.path.join(a.out, "pool_uids.json"), "w"))
++    cfg["s6f0"] = {"started": SC.amman_now().isoformat(timespec="seconds"), "heliosli_source_sha256": SC.SOURCE_SHA,  # S6F0
++                   "trainer_sha256": SC.sha256_file(os.path.abspath(__file__)),
++                   "init_sha256": SC.sha256_file(a.init) if a.init and os.path.exists(a.init) else a.init,
++                   "pool_sha256": SC.sha256_file(a.pool) if a.pool else None,
++                   "pool_fold_counts": {int(f_): int((pool_fold == f_).sum()) for f_ in np.unique(pool_fold)},
++                   "torch": torch.__version__, "gpu": torch.cuda.get_device_name() if torch.cuda.is_available() else None}
++    SC.atomic_json(cfg, os.path.join(a.out, "run_config.json"), indent=1)
++    SC.atomic_json(pool, os.path.join(a.out, "pool_uids.json"))
+     for seed in range(a.seed_base, a.seed_base + a.seeds):
+         for arm in [x.split("=", 1)[0] for x in a.arms.split(",") if x]:
+             run(arm, seed)
