@@ -35,8 +35,8 @@ shutil.copytree(S6_SRC, S6, dirs_exist_ok=True)
 print("data", DATA, "| ortho", ORTHO, "| code", S6_SRC, flush=True)
 env = dict(os.environ, S6_DATA=str(DATA), S6_ANATOMY=str(ORTHO / "anatomy.pt"), PYTHONDONTWRITEBYTECODE="1",
            HF_HUB_OFFLINE="1")
-subprocess.run([sys.executable, str(S6 / "helios_sources.py"), "--dest", str(S6 / "heliosli"), "--ortho", str(ORTHO), "--wheels"],
-               check=True, env=env)
+subprocess.run([sys.executable, str(S6 / "helios_sources.py"), "--dest", str(S6 / "heliosli"), "--ortho", str(ORTHO), "--wheels",
+                "--stage", str(S6_SRC.parent / "heliosli_compact_stage.py")], check=True, env=env)
 OUT = Path("/kaggle/working/shard%d" % SHARD)
 cmd = [sys.executable, "-u", str(S6 / "build_px_shard.py"), "--shard", str(SHARD), "--nshards", str(NSHARDS), "--out", str(OUT),
        "--tmp", str(TMP / "s6_work"), "--workers", str(os.cpu_count()), "--quality", str(QUALITY),

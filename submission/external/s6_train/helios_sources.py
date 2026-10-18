@@ -18,9 +18,9 @@ import s6common as SC  # noqa: E402
 STAGE = HERE.parent / "heliosli_compact_stage.py"
 
 
-def sources():
+def sources(stage=STAGE):
     """The SOURCES dict literal of the verbatim stage file, parsed (not executed)."""
-    tree = ast.parse(STAGE.read_text(encoding="utf-8"))
+    tree = ast.parse(Path(stage).read_text(encoding="utf-8"))
     for node in tree.body:
         if isinstance(node, ast.Assign) and any(getattr(t, "id", None) == "SOURCES" for t in node.targets):
             return ast.literal_eval(node.value)
@@ -32,10 +32,11 @@ def main():
     ap.add_argument("--dest", required=True)
     ap.add_argument("--ortho", required=True, help="mount of heliosli/rsna-orthofoundation-fold0-epoch7-20261004")
     ap.add_argument("--wheels", action="store_true")
+    ap.add_argument("--stage", default=str(STAGE), help="heliosli_compact_stage.py (default: next to this directory)")
     a = ap.parse_args()
     dest, ortho = Path(a.dest), Path(a.ortho)
     dest.mkdir(parents=True, exist_ok=True)
-    src = sources()
+    src = sources(a.stage)
     for name, want in SC.SOURCE_SHA.items():
         data = src[name].encode("utf-8")
         got = hashlib.sha256(data).hexdigest()
