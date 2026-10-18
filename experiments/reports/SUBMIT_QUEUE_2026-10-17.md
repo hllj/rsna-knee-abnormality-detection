@@ -57,8 +57,8 @@ Recommendation: keep picks EXP-117 / EXP-104 unchanged; no submission slots spen
 
 | EXP | Notebook | Change vs EXP-117 | Status |
 |---|---|---|---|
-| EXP-119 | v78 | heliosli 0.958 per-finding weights | submitted 10-17 10:43 local |
-| EXP-123 | v79 | heliosli V2 (sharper weights + goodpjw reader v11) | submitted 10-17 10:43 local |
+| EXP-119 | v78 | heliosli 0.958 per-finding weights | submitted 10-17 10:43 local — **LB 0.958** |
+| EXP-123 | v79 | heliosli V2 (sharper weights + goodpjw reader v11) | submitted 10-17 10:43 local — **LB 0.958** |
 
 ## Our routing on top of heliosli's weights (owner request 10-17 ~11:00 local)
 Union recipe: heliosli's weights where they leave 0.5 (Lateral OA, PF OA, Synovitis, Baker's), our EXP-117 routing on the
@@ -77,5 +77,10 @@ Gold-58 sanity check (`gold_hybrid.py`; nartaa in-sample, R7 + flip stands in fo
 
 | EXP | Notebook | Parent | Status |
 |---|---|---|---|
-| EXP-124 | v80 | EXP-123 + our routing | smoke-tested (COMPLETE, weights verified); awaiting owner OK |
-| EXP-125 | v81 | EXP-119 + our routing | smoke-tested (COMPLETE, weights verified); awaiting owner OK |
+| EXP-124 | v80 | EXP-123 + our routing | submitted 10-17 11:11 local — **LB 0.958** (owner: best on the more precise display) |
+| EXP-125 | v81 | EXP-119 + our routing | submitted 10-17 11:11 local — **LB 0.958** (owner: second) |
+
+## Picks after 10-17
+All four (EXP-119/123/124/125) round to 0.958 on the public LB; the owner reports EXP-124 > EXP-125 on the finer score.
+- **Pick 1 (any public weights): EXP-124**, backup EXP-125.
+- **Pick 2 (rule-safe, competition data only): EXP-104** (0.943), unchanged.
