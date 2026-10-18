@@ -25,7 +25,8 @@ if [ "$STEP" = all ] || [ "$STEP" = data ]; then
   "$PY" "$S6/helios_sources.py" --dest "$S6/heliosli" --ortho "$D/ortho"
   echo "== px-cache shards from Kaggle (hlly34/rsna-knee-s6-cache-<k>)"
   for k in $(seq 0 $((NSHARDS - 1))); do
-    [ -f "$D/s6_shards/$k/shard$k/summary.json" ] || "$K" kernels output "hlly34/rsna-knee-s6-cache-$k" -p "$D/s6_shards/$k" -q
+    # parallel fetch (kaggle kernels output pulls the ~1,700 files one by one: 2.8 MB/s from a far box vs ~73 MB/s)
+    [ -f "$D/s6_shards/$k/shard$k/summary.json" ] || "$PY" scripts/vast/fetch_kernel_output.py "hlly34/rsna-knee-s6-cache-$k" "$D/s6_shards/$k" --threads 48
   done
   [ -f "$PX/index.json" ] || "$PY" "$S6/unpack_px.py" --shards "$D"/s6_shards/*/shard* --out "$PX" --workers "$(nproc)"
   rm -rf "$D/s6_shards"                        # the unpacked cache is all the trainer reads
