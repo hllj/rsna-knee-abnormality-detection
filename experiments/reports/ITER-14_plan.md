@@ -62,6 +62,30 @@ raw px 247 GB, lossless zlib 171 GB, **JPEG q95 71.7 GB** (estimate was 15-25 GB
 JPEG q95 error: MAE 0.68 grey levels, p99.9 4.4, max 12 → kept. Kaggle output cap ~20 GB → **5 shards** (~14 GB, ~1.6 h each,
 2 GPU sessions at a time → ~5 h wall, ~8 h quota). vast: ~72 GB download (~$0.2 at $0.0026/GB), ~320 GB disk.
 
+### Step 2 result: full cache (10-18 12:29-15:14 local)
+5 shards × ~864 studies, ~50 min each on Kaggle T4 (0.3 studies/s), **4,321/4,321 studies, 0 errors**, 70.9 GB JPEG q95,
+4.9 h Kaggle GPU quota.
+
+### Step 3-5 result: EXP-128 = ConvNeXt-S, nartaa's exact argv, seed 43, all data (owner switched from DINOv2 on 10-18)
+- Box: vast 56544406, 1× RTX 4090 (AU), 18:30-23:23 local, destroyed after the upload. First offer (52207942) never got its
+  GPU (destroyed). `kaggle kernels output` pulled shards at 2.8 MB/s from AU → `scripts/vast/fetch_kernel_output.py` (48
+  threads, ~73 MB/s). Cost ≈ $3.4 (credit 4.59 → ~1.2).
+- Training: 16 epochs, 34,096 steps, 3.6 h (330-372 windows/s, GPU 100 %), 0 failed studies. Loss per epoch tracks
+  nartaa's run (ep1 0.549 vs 0.552, ep8 0.4334 vs 0.4334, ep16 **0.3923 vs 0.3911**).
+- Weights: private Kaggle dataset `hlly34/rsna-knee-s6-cnx-s43` (`E_prior_s43_fall.pt`, sha256 88b81233…, + DONE, run_config,
+  gold58).
+- **Gold-58 macro AUC (our JPEG cache): ours s43 0.929, nartaa public s42 0.932, rank mean of both 0.934.** Pipeline check:
+  nartaa's s42 on our cache 0.932 vs their own gold 0.931 (fold-0 model).
+
+### Inference
+- `make_s6_stage.py` → `s6_stage_<name>.py`: heliosli's compact stage with an inline nartaa-geometry manifest (320/288, eval
+  stride 1, v4, no state head / side model), bundle assembled from the checkpoints' own datasets (sha-checked, nothing re-hosted);
+  compact_infer averages every `E_prior_s*_f*.pt`.
+- EXP-126 (EXP-124 + heliosli compact-v1 S6 0.3) **timed out (> 9 h)**: compact-v1 = 4 folds @352 + side model + state head,
+  as heavy as R6. Owner chose option 1: S6fall instead (1 model @288, ~1/6 of the model compute; decode/anchors ~1.2 h).
+- EXP-127 = EXP-124 + S6fall s42 at 0.3 in the heliosli slot (`s6_stage_s42.py`); EXP-128 = same with s42 + s43
+  (`s6_stage_s42s43.py`). Gold-58 cannot separate the share (0.939 for every m in 0-0.7). No time guard (owner: option 1 only).
+
 ## Cost / time (superseded by the training plan above)
 3 runs (DINOv2 fold 0, DINOv2 all-data, ConvNeXt seed 43 all-data) on 3× RTX 3090: ~8-10 h each in parallel + ~2 h data
 and anchors → ~$12-15. **Not rented — awaiting owner OK.**
