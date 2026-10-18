@@ -56,6 +56,12 @@ Timeline: steps 0-2 on 10-18, training overnight, steps 4-6 on 10-19, one day of
 Insurance (optional, +$2.5-3): ConvNeXt-S seed 43 in parallel on a 2× 4090 box, in case the untuned ViT LR fails.
 Approvals: steps 0-2 use only Kaggle quota; step 3 rents a GPU.
 
+### Step 1 result: pilot (hlly34/rsna-knee-s6-cache-pilot v2, 10-18 12:24 local)
+50/50 studies, 0 errors, T4 + 4 CPUs, 0.148 studies/s (CPU-bound). Per study 600 rows. Projected for 4,321 studies:
+raw px 247 GB, lossless zlib 171 GB, **JPEG q95 71.7 GB** (estimate was 15-25 GB: MRI rows compress ~3.4×, not ~10×).
+JPEG q95 error: MAE 0.68 grey levels, p99.9 4.4, max 12 → kept. Kaggle output cap ~20 GB → **5 shards** (~14 GB, ~1.6 h each,
+2 GPU sessions at a time → ~5 h wall, ~8 h quota). vast: ~72 GB download (~$0.2 at $0.0026/GB), ~320 GB disk.
+
 ## Cost / time (superseded by the training plan above)
 3 runs (DINOv2 fold 0, DINOv2 all-data, ConvNeXt seed 43 all-data) on 3× RTX 3090: ~8-10 h each in parallel + ~2 h data
 and anchors → ~$12-15. **Not rented — awaiting owner OK.**

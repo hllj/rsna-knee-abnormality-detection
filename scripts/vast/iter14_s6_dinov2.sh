@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # ITER-14 on a vast box: S6 recipe (nartaa, discussion 749359) with a DINOv2 ViT-B backbone, all data, from the Kaggle-built
 # px cache (no DICOMs downloaded). Run in a named tmux session from the repo root:
-#   NSHARDS=2 bash scripts/vast/iter14_s6_dinov2.sh            # data + unpack + check + full run (resumes if re-run)
-#   STEP=data|check|train NSHARDS=2 bash scripts/vast/iter14_s6_dinov2.sh
+#   NSHARDS=5 bash scripts/vast/iter14_s6_dinov2.sh            # data + unpack + check + full run (resumes if re-run)
+#   STEP=data|check|train NSHARDS=5 bash scripts/vast/iter14_s6_dinov2.sh
 # The run itself is the speed probe: it logs windows/s and the ETA every 50 steps (runs/EXP-128/train.log).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 PY=${PYTHON:-python}
 K=${KAGGLE_BIN:-kaggle}
 EXP=${EXP:-EXP-128}
-NSHARDS=${NSHARDS:-2}
+NSHARDS=${NSHARDS:-5}
 STEP=${STEP:-all}
 D=${DATA_DIR:-data}
 S6=submission/external/s6_train
