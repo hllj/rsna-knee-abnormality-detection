@@ -90,8 +90,11 @@ JPEG q95 error: MAE 0.68 grey levels, p99.9 4.4, max 12 → kept. Kaggle output 
 | EXP | Notebook | What | Status |
 |---|---|---|---|
 | EXP-126 | v82 | EXP-124 + heliosli compact-v1 S6 0.3 | **timeout (> 9 h)** |
-| EXP-127 | v84 | EXP-124 + nartaa S6fall s42 0.3 (v83 failed: JSON `null` in the generated stage, fixed bed2ae1) | submitted 10-19 03:14 local |
-| EXP-128 | v85 | EXP-124 + S6 bundle s42 + our s43 0.3 (S6 output differs from EXP-127's by up to 0.11 → both seeds averaged) | submitted 10-19 03:31 local |
+| EXP-127 | v84 | EXP-124 + nartaa S6fall s42 0.3 (v83 failed: JSON `null` in the generated stage, fixed bed2ae1) | **LB 0.958** (within 9 h) |
+| EXP-128 | v85 | EXP-124 + S6 bundle s42 + our s43 0.3 (S6 output differs from EXP-127's by up to 0.11 → both seeds averaged) | **LB 0.958** (within 9 h) |
+
+Reading: S6fall (1 model @288) fits the 9 h budget where compact-v1 did not; adding it, with or without our seed, keeps the
+public score at 0.958 (= EXP-119/123/124/125). Public SD ~0.003, so 3-decimal ties cannot rank these recipes.
 
 ## Cost / time (superseded by the training plan above)
 3 runs (DINOv2 fold 0, DINOv2 all-data, ConvNeXt seed 43 all-data) on 3× RTX 3090: ~8-10 h each in parallel + ~2 h data
