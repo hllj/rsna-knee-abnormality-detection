@@ -3,6 +3,9 @@
 Researched 2026-09-28 from the Kaggle overview/data/rules pages, ~40 discussion threads and the top
 public notebooks. Links are relative to https://www.kaggle.com/competitions/rsna-knee-abnormality-detection.
 
+> **Outcome (closed 2026-10-22):** public 0.958 / private 0.942 with EXP-124 + EXP-127, public rank 571 / 6,425, no medal.
+> Private scores ran ~0.016 below public for every submission (r 0.996). See `experiments/reports/FINAL_2026-10-24.md`.
+
 ## Facts
 
 | | |

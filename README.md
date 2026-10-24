@@ -9,40 +9,46 @@ Training / inference pipeline for [rsna-knee-abnormality-detection](https://www.
 | [docs/COMPETITION_NOTES.md](docs/COMPETITION_NOTES.md) | rules, host rulings, what works, plan |
 | [docs/KAGGLE_RESOURCES.md](docs/KAGGLE_RESOURCES.md) | public labels / weights / notebooks / discussions, scored |
 | [docs/VAST.md](docs/VAST.md) | details of the rented-GPU workflow below |
-| [experiments/EXPERIMENTS.md](experiments/EXPERIMENTS.md) | every experiment: CV, gold-58, public LB |
+| [experiments/EXPERIMENTS.md](experiments/EXPERIMENTS.md) | every experiment: CV, gold-58, public and private LB |
+| [experiments/reports/FINAL_2026-10-24.md](experiments/reports/FINAL_2026-10-24.md) | final result, what worked / did not, costs, artifacts |
 
-**Current best: EXP-049 — ConvNeXt-S dense 5 folds + Raptor repro f0 + reader repro f0 + CoAtNet f0, family rank weights
-0.3/0.3/0.3/0.1 → public LB 0.936.** Previous: EXP-048 (same without CoAtNet) 0.935, EXP-047 (all fold 0) 0.934,
-EXP-027 ConvNeXt-S dense 5 folds 0.930. Full history in [experiments/EXPERIMENTS.md](experiments/EXPERIMENTS.md).
+> **Status: finished.** The competition closed on 2026-10-22. Final picks **EXP-124** and **EXP-127**: public LB **0.958**,
+> private LB **0.942** — public rank 571 / 6,425, no medal. Wrap-up, lessons and artifact inventory:
+> **[experiments/reports/FINAL_2026-10-24.md](experiments/reports/FINAL_2026-10-24.md)**.
 
-| Exp | What | OOF | Gold-58 | Public LB |
+| Date | Exp | What | Public | Private |
 |---|---|---|---|---|
-| EXP-000 | dry run: fold 0, 485 studies, 8 epochs | 0.762 | 0.771 | 0.791 |
-| EXP-007 | fold 0 only, full data, 15 epochs | 0.865 | 0.876 | 0.907 |
-| EXP-008 | fold 1 only (same setup) | 0.874 | 0.877 | 0.905 |
-| EXP-009 | all 5 folds, rank-averaged | 0.867 | 0.893 | **0.914** |
-| EXP-010 | student, 50/50 pseudo-labels (fold 0) | 0.845 | 0.851 | — (stopped: worse) |
-| EXP-012 | EXP-009 checkpoints via fast streaming inference (~11 min instead of ~30) | 0.867 | 0.893 | 0.914 |
-| EXP-019 | ConvNeXt-S @288 fold 0 | 0.872 | 0.896 | 0.923 |
-| EXP-021 | ConvNeXt-S @288 fold 1 | 0.888 | 0.894 | 0.924 |
-| **EXP-020** | **ConvNeXt-S @288, all 5 folds rank-averaged** | **0.876** | **0.901** | **0.926** |
-| EXP-022 | blend: ConvNeXt-S 5 folds (0.7) + EfficientNet-B0 5 folds (0.3) | 0.879 | 0.902 | 0.925 (neutral) |
-| EXP-025 | ConvNeXt-S @288 **dense cache** (88 slices) fold 0 | 0.875 | 0.904 | 0.926 |
-| EXP-029 | ConvNeXt-S @288 dense fold 1 | 0.887 | 0.903 | 0.925 |
-| EXP-027 | ConvNeXt-S @288 dense cache, 5 folds rank-averaged | 0.878 | 0.910 | 0.930 |
-| EXP-040 | CoAtNet-2 @384 dense fold 0 (our recipe) | 0.868 | 0.909 | 0.924 |
-| EXP-045 | **Raptor repro** fold 0 (ITER-06: CoAtNet-2 @384, 80 slices @336, all 78 windows) | 0.877 | 0.899 | 0.928 |
-| EXP-046 | **reader repro** fold 0 (ITER-06: ConvNeXt-T transformer-MIL, per-series cache) | 0.869 | 0.907 | 0.922 |
-| EXP-047 | 3-way fold-0 blend: ConvNeXt dense + Raptor + reader, equal rank weights | 0.883 | 0.916 | 0.934 |
-| EXP-048 | ConvNeXt dense 5 folds + Raptor f0 + reader f0, equal family weights | – | – | 0.935 |
-| **EXP-049** | **EXP-048 + CoAtNet dense f0; family weights 0.3/0.3/0.3/0.1** | – | – | **0.936** |
+| 09-28 | EXP-000 | dry run: fold 0 on a 600-study subset | 0.791 | 0.760 |
+| 09-29 | EXP-009 | EfficientNet-B0 @224, 5 folds, report-derived labels | 0.914 | 0.900 |
+| 10-07 | EXP-020 | ConvNeXt-S @288, 5 folds | 0.926 | 0.911 |
+| 10-07 | EXP-027 | ConvNeXt-S, dense 88-slice cache, 5 folds | 0.930 | 0.914 |
+| 10-08 | EXP-049 | + Raptor repro + reader repro + CoAtNet, family rank weights | 0.936 | 0.922 |
+| 10-10 | EXP-074 | our Raptor v2, 96-slice native-384 cache, 2 all-data seeds | 0.941 | 0.923 |
+| 10-15 | EXP-104 | best rule-safe blend (competition data only) | 0.943 | 0.927 |
+| 10-14 | EXP-103 | nartaa 0.949 CoAtNet (384 + 224) + heliosli R7 compact ConvNeXt | 0.956 | 0.941 |
+| 10-16 | EXP-117 | per-finding routing, heliosli R6 + flip TTA | 0.957 | 0.942 |
+| 10-17 | **EXP-124** | heliosli V2 weights + goodpjw reader v11 + our routing — **final pick 1** | **0.958** | **0.942** |
+| 10-19 | **EXP-127** | EXP-124 + nartaa's S6fall ConvNeXt-S — **final pick 2** | **0.958** | **0.942** |
+| 10-19 | EXP-128 | EXP-127 + our retrained S6 ConvNeXt-S (seed 43, ITER-14) | 0.958 | 0.942 |
 
-Iteration reports: [ITER-01 baseline](experiments/reports/ITER-01_2026-09-28.md) ·
+Every experiment with OOF, gold-58, public and private scores: [experiments/EXPERIMENTS.md](experiments/EXPERIMENTS.md)
+(public vs private: Pearson r 0.996, private − public −0.016 on average).
+
+Reports: [ITER-01 baseline](experiments/reports/ITER-01_2026-09-28.md) ·
 [ITER-01b inference speed-up](experiments/reports/ITER-01b_inference_speedup.md) ·
-[ITER-02 plan (resolution / backbone)](experiments/reports/ITER-02_plan.md) ·
-[ITER-02 fold-0 results: ConvNeXt-S @288 wins](experiments/reports/ITER-02_2026-09-29.md) ·
-[ITER-03 ConvNeXt 5 folds: LB 0.926](experiments/reports/ITER-03_2026-10-06.md) ·
-**[ITER-04 plan: denser-slice cache + CoAtNet @384](experiments/reports/ITER-04_plan.md)** (in progress).
+[ITER-02 ConvNeXt-S @288](experiments/reports/ITER-02_2026-09-29.md) ·
+[ITER-03 ConvNeXt 5 folds](experiments/reports/ITER-03_2026-10-06.md) ·
+[ITER-04 dense cache + CoAtNet](experiments/reports/ITER-04_plan.md) ·
+[ITER-05](experiments/reports/ITER-05_plan.md) ·
+[ITER-06 Raptor / reader repro](experiments/reports/ITER-06_2026-10-08.md) ·
+[strategy 10-09](experiments/reports/STRATEGY_2026-10-09.md) ·
+[ITER-08](experiments/reports/ITER-08_plan.md) · [ITER-09](experiments/reports/ITER-09_plan.md) ·
+[ITER-12](experiments/reports/ITER-12_plan.md) · [ITER-13](experiments/reports/ITER-13_plan.md) ·
+[DINOv2 / RadImageNet](experiments/reports/DINO_RADIMAGENET_2026-10-17.md) ·
+[ITER-14 S6 retrain](experiments/reports/ITER-14_plan.md) ·
+submit queues 10-09 … 10-17 (`experiments/reports/SUBMIT_QUEUE_*.md`) · **[final wrap-up](experiments/reports/FINAL_2026-10-24.md)**.
+
+The rest of this README is the runbook as it was used during the competition.
 
 ---
 

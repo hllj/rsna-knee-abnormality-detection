@@ -1,0 +1,10 @@
+cache_280_reader studies: 4407 08:10
+reader_repro fold 1: OOF 0.89158 gold 0.90447 min 110.5 10:01
+reader_repro fold 1 UPLOADED (rsna-knee-reader-repro/exp-088-fold1) 10:01
+reader_repro fold 2: OOF 0.88853 gold 0.89681 min 134.3 12:15
+reader_repro fold 2 UPLOADED (rsna-knee-reader-repro/exp-088-fold2) 12:16
+reader_repro fold 3: OOF 0.88399 gold 0.89275 min 126.0 14:22
+reader_repro fold 3 UPLOADED (rsna-knee-reader-repro/exp-088-fold3) 14:22
+reader_repro fold 4: OOF 0.8799 gold 0.91428 min 110.4 16:13
+reader_repro fold 4 UPLOADED (rsna-knee-reader-repro/exp-088-fold4) 16:13
+ITER12_DONE 16:13

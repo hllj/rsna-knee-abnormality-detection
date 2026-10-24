@@ -28,12 +28,12 @@ REG = os.path.join(ROOT, "experiments", "registry.csv")
 MD = os.path.join(ROOT, "experiments", "EXPERIMENTS.md")
 COLS = ["exp_id", "date", "kind", "kernel", "version", "exp_name", "backbone", "img_size", "epochs", "labels",
         "pseudo", "folds", "n_train", "oof_auc", "gold_auc_mean_fold", "gold_auc_ensemble", "lb_public",
-        "minutes", "notes"]
+        "lb_private", "minutes", "notes"]
 
 
 def load() -> pd.DataFrame:
     if os.path.exists(REG):
-        return pd.read_csv(REG, dtype=str).reindex(columns=COLS)
+        return pd.read_csv(REG, dtype=str).reindex(columns=COLS).astype(object)   # a new column must not become float
     return pd.DataFrame(columns=COLS)
 
 
@@ -83,23 +83,28 @@ def cmd_add(a):
 
 
 def cmd_lb(a):
-    out = subprocess.run(["kaggle", "competitions", "submissions", a.competition, "--format", "json"],
+    out = subprocess.run(["kaggle", "competitions", "submissions", a.competition, "--format", "json", "--page-size", "200"],
                          capture_output=True, text=True).stdout
     subs = json.loads(out[out.find("["):]) if "[" in out else []
     df = load()
     for s in subs:
         m = re.match(r"(EXP-\d+)", str(s.get("description", "")))
         score = s.get("publicScore") or s.get("public_score")
+        private = s.get("privateScore") or s.get("private_score")   # filled once the competition has closed
         if m and score not in (None, "", "None"):
-            df = upsert(df, {"exp_id": m.group(1), "lb_public": score})
-            print(m.group(1), score, s.get("status"))
+            row = {"exp_id": m.group(1), "lb_public": score}
+            if private not in (None, "", "None"):
+                row["lb_private"] = private
+            df = upsert(df, row)
+            print(m.group(1), score, private or "", s.get("status"))
     save(df)
 
 
 def render(df: pd.DataFrame = None) -> None:
     df = load() if df is None else df
     show = ["exp_id", "date", "kind", "exp_name", "backbone", "img_size", "epochs", "labels", "pseudo", "folds",
-            "oof_auc", "gold_auc_mean_fold", "gold_auc_ensemble", "lb_public", "minutes", "kernel", "version", "notes"]
+            "oof_auc", "gold_auc_mean_fold", "gold_auc_ensemble", "lb_public", "lb_private", "minutes", "kernel", "version",
+            "notes"]
     lines = [
         "# Experiment registry",
         "",
@@ -109,7 +114,8 @@ def render(df: pd.DataFrame = None) -> None:
         "Noise floor ≈ 0.003.",
         "* **gold_auc_mean_fold / _ensemble**: macro AUC on the 58 radiologist-labelled studies, single fold "
         "average vs rank-averaged fold ensemble. Noise ≈ ±0.02.",
-        "* **lb_public**: Kaggle public leaderboard (matched by the `EXP-NNN` prefix of the submission message).",
+        "* **lb_public / lb_private**: Kaggle public / private leaderboard (matched by the `EXP-NNN` prefix of the "
+        "submission message; private scores appeared when the competition closed on 2026-10-22).",
         "",
         "| " + " | ".join(show) + " |",
         "|" + "---|" * len(show),
@@ -123,7 +129,7 @@ def render(df: pd.DataFrame = None) -> None:
 def cv_lb_section(df: pd.DataFrame) -> list:
     """Every scored submission with its local metrics, deltas vs the previous one, and correlations."""
     d = df.copy()
-    for c in ("oof_auc", "gold_auc_ensemble", "gold_auc_mean_fold", "lb_public"):
+    for c in ("oof_auc", "gold_auc_ensemble", "gold_auc_mean_fold", "lb_public", "lb_private"):
         d[c] = pd.to_numeric(d[c], errors="coerce")
     d["gold"] = d["gold_auc_ensemble"].fillna(d["gold_auc_mean_fold"])
     d = d[d["lb_public"].notna()].reset_index(drop=True)
@@ -131,7 +137,8 @@ def cv_lb_section(df: pd.DataFrame) -> list:
            "Scored submissions in order. `ΔOOF` / `ΔLB` are vs the previous row. Single-fold OOF values are measured "
            "on different studies per fold, so compare experiments on the pooled 5-fold OOF where possible. With few "
            "points Pearson r is dominated by big jumps (e.g. the dry run); Spearman is the fairer read.", "",
-           "| exp_id | folds | oof_auc | gold | lb_public | ΔOOF | Δgold | ΔLB | notes |", "|---|---|---|---|---|---|---|---|---|"]
+           "| exp_id | folds | oof_auc | gold | lb_public | lb_private | ΔOOF | Δgold | ΔLB | notes |",
+           "|---|---|---|---|---|---|---|---|---|---|"]
     prev = None
     for _, r in d.iterrows():
         def delta(c):
@@ -139,7 +146,8 @@ def cv_lb_section(df: pd.DataFrame) -> list:
                 return ""
             return f"{r[c] - prev[c]:+.4f}"
         out.append(f"| {r.exp_id} | {r.folds} | {r.oof_auc if pd.notna(r.oof_auc) else ''} | "
-                   f"{round(r.gold, 4) if pd.notna(r.gold) else ''} | {r.lb_public} | {delta('oof_auc')} | "
+                   f"{round(r.gold, 4) if pd.notna(r.gold) else ''} | {r.lb_public} | "
+                   f"{r.lb_private if pd.notna(r.lb_private) else ''} | {delta('oof_auc')} | "
                    f"{delta('gold')} | {delta('lb_public')} | {str(r.notes)[:80].replace('|', '/')} |")
         prev = r
     for c in ("oof_auc", "gold"):
@@ -149,6 +157,11 @@ def cv_lb_section(df: pd.DataFrame) -> list:
                        f" (Spearman {v[c].corr(v['lb_public'], method='spearman'):.3f}).")
         else:
             out.append(f"\nr({c}, LB): need ≥ 3 submissions with both values (have {len(v)}).")
+    v = d[["lb_public", "lb_private"]].dropna()
+    if len(v) >= 3:
+        out.append(f"\nPublic vs private: Pearson r = {v.lb_public.corr(v.lb_private):.3f}, Spearman "
+                   f"{v.lb_public.corr(v.lb_private, method='spearman'):.3f}, mean private − public "
+                   f"{(v.lb_private - v.lb_public).mean():+.4f} over {len(v)} submissions.")
     return out
 
 

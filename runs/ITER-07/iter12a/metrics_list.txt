@@ -1,0 +1,4 @@
+models/convnext_small_288_dense_pl/fold1_metrics.json
+models/convnext_small_288_dense_pl/fold2_metrics.json
+models/convnext_small_288_dense_pl/fold3_metrics.json
+models/convnext_small_288_dense_pl/fold4_metrics.json

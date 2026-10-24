@@ -1,0 +1,10 @@
+cache_256_dense studies: 4407 08:06
+convnext_small_288_dense_pl fold 1: OOF 0.95713 gold 0.90104 min 110.9 09:57
+convnext_small_288_dense_pl fold 1 UPLOADED (rsna-knee-convnext-s-288-dense-pl/exp-087-fold1) 09:57
+convnext_small_288_dense_pl fold 2: OOF 0.95939 gold 0.90139 min 111.4 11:49
+convnext_small_288_dense_pl fold 2 UPLOADED (rsna-knee-convnext-s-288-dense-pl/exp-087-fold2) 11:49
+convnext_small_288_dense_pl fold 3: OOF 0.96447 gold 0.90304 min 117.5 13:47
+convnext_small_288_dense_pl fold 3 UPLOADED (rsna-knee-convnext-s-288-dense-pl/exp-087-fold3) 13:47
+convnext_small_288_dense_pl fold 4: OOF 0.95712 gold 0.9024 min 109.0 15:36
+convnext_small_288_dense_pl fold 4 UPLOADED (rsna-knee-convnext-s-288-dense-pl/exp-087-fold4) 15:36
+ITER12_DONE 15:36

@@ -1,0 +1,4 @@
+cache_256_dense studies: 4407 14:34
+convnext_small_288_dense_pl fold 0: OOF 0.95867 gold 0.90438 min 91.0 16:05
+convnext_small_288_dense_pl fold 0 UPLOADED (rsna-knee-convnext-s-288-dense-pl/exp-079-fold0) 16:05
+ITER10_DONE 16:05

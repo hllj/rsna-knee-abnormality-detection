@@ -1,0 +1,5 @@
+cache_384_d96 studies: 4407 17:19
+teacher: /root/rsna-knee/src/config.py:16: UserWarning: register_new_resolver() is deprecated and will be removed in a future release. 17:19
+raptor_v3_d96_alldata_pl: gold 0.91334 min 254.9 best-3 by gold [0.911, 0.9083, 0.9076] 21:34
+raptor_v3_d96_alldata_pl UPLOADED (rsna-knee-raptor-v3-d96-pl) 21:34
+ITER11_DONE 21:34

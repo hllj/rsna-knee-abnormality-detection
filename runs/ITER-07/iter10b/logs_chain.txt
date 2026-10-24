@@ -1,0 +1,4 @@
+cache_336_raptor studies: 4407 14:41
+convnext_small_288_native fold 0: OOF 0.86436 gold 0.88966 min 127.2 16:48
+convnext_small_288_native fold 0 UPLOADED (rsna-knee-convnext-s-288-native/exp-080-fold0) 16:49
+ITER10_DONE 16:49
